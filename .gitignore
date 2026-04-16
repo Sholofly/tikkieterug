@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+## Rider/JetBrains
+.idea/
+
+## VS Code
+.vscode/
+
+## Environment
+.env
+.env.*
+
+## Docker
+docker-compose.override.yml
+
+## OS
+.DS_Store
+Thumbs.db
