@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddCors();
+builder.Services.AddHostedService<ClubImportScheduler>();
 
 var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
@@ -1065,3 +1066,48 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+// Background service: runs club import on startup and daily at midnight
+public class ClubImportScheduler : BackgroundService
+{
+    private readonly IServiceProvider _services;
+    private readonly ILogger<ClubImportScheduler> _logger;
+
+    public ClubImportScheduler(IServiceProvider services, ILogger<ClubImportScheduler> logger)
+    {
+        _services = services;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Wait briefly for the web server to start before calling the import endpoint
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _services.CreateScope();
+                var httpFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+                var client = httpFactory.CreateClient();
+                client.BaseAddress = new Uri("http://localhost:8080");
+
+                _logger.LogInformation("Starting scheduled club import...");
+                var response = await client.PostAsync("/clubs/import", null, stoppingToken);
+                _logger.LogInformation("Club import completed with status {Status}", response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Club import failed");
+            }
+
+            // Calculate delay until next midnight
+            var now = DateTime.Now;
+            var nextMidnight = now.Date.AddDays(1);
+            var delay = nextMidnight - now;
+            _logger.LogInformation("Next club import at {Time}", nextMidnight);
+            await Task.Delay(delay, stoppingToken);
+        }
+    }
+}
