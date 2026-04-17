@@ -79,6 +79,68 @@
           </div>
         </div>
       </div>
+
+      <!-- Upcoming club matches -->
+      <div v-if="clubUpcomingGrouped.length > 0" style="margin-top: 16px;">
+        <div class="collapsible-header" @click="toggleSection('clubUpcoming')" style="padding: 0 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+          <span class="collapse-chevron" :class="{ open: sections.clubUpcoming }">▶</span>
+          <span class="text-xs text-muted font-bold" style="text-transform: uppercase; letter-spacing: 0.5px;">Komende wedstrijden clubs</span>
+        </div>
+        <template v-if="sections.clubUpcoming">
+          <div v-for="group in clubUpcomingGrouped" :key="group.date" class="card" style="margin-bottom: 8px;">
+            <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
+            <div
+              v-for="match in group.matches"
+              :key="match.matchId"
+              class="fixture-row"
+              @click="router.push(`/match/${match.matchId}`)"
+            >
+              <div class="fixture-home">
+                <span>{{ match.homeClub }}</span>
+                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              </div>
+              <div class="fixture-center">
+                <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+              </div>
+              <div class="fixture-away">
+                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                <span>{{ match.awayClub }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Upcoming competition matches -->
+      <div v-if="competitionUpcomingGrouped.length > 0" style="margin-top: 16px;">
+        <div class="collapsible-header" @click="toggleSection('compUpcoming')" style="padding: 0 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+          <span class="collapse-chevron" :class="{ open: sections.compUpcoming }">▶</span>
+          <span class="text-xs text-muted font-bold" style="text-transform: uppercase; letter-spacing: 0.5px;">Komende wedstrijden competities</span>
+        </div>
+        <template v-if="sections.compUpcoming">
+          <div v-for="group in competitionUpcomingGrouped" :key="group.date" class="card" style="margin-bottom: 8px;">
+            <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
+            <div
+              v-for="match in group.matches"
+              :key="match.matchId"
+              class="fixture-row"
+              @click="router.push(`/match/${match.matchId}`)"
+            >
+              <div class="fixture-home">
+                <span>{{ match.homeClub }}</span>
+                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              </div>
+              <div class="fixture-center">
+                <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+              </div>
+              <div class="fixture-away">
+                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                <span>{{ match.awayClub }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
     </template>
   </div>
 </template>
@@ -94,13 +156,28 @@ const api = useApi()
 const favoritesStore = useFavoritesStore()
 
 const loading = ref(false)
-const allMatches = ref([])
+const allTodayMatches = ref([])
+const allUpcomingMatches = ref([])
 let refreshInterval = null
+
+// Collapsible section state, persisted in localStorage
+const SECTIONS_KEY = 'dashboard-sections'
+const sections = ref(JSON.parse(localStorage.getItem(SECTIONS_KEY) || '{"clubUpcoming":false,"compUpcoming":false}'))
+
+function toggleSection(key) {
+  sections.value[key] = !sections.value[key]
+  localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections.value))
+}
 
 const today = new Date().toISOString().slice(0, 10)
 
 function statusLabel(status) {
   return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status
+}
+
+function formatDateShort(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 // Collect unique competition IDs from both favorite clubs and competitions
@@ -117,7 +194,7 @@ function getCompetitionIds() {
 const statusOrder = { live: 0, halftime: 1, scheduled: 2, ended: 3 }
 
 const todayMatches = computed(() => {
-  return [...allMatches.value].sort((a, b) => {
+  return [...allTodayMatches.value].sort((a, b) => {
     const oa = statusOrder[a.status] ?? 9
     const ob = statusOrder[b.status] ?? 9
     if (oa !== ob) return oa - ob
@@ -125,43 +202,98 @@ const todayMatches = computed(() => {
   })
 })
 
-async function fetchTodayMatches() {
+function groupByDate(matches) {
+  const groups = []
+  let current = null
+  for (const m of matches) {
+    if (!current || current.date !== m._date) {
+      current = { date: m._date, matches: [] }
+      groups.push(current)
+    }
+    current.matches.push(m)
+  }
+  return groups
+}
+
+const clubUpcomingGrouped = computed(() => {
+  const favClubIds = new Set(favoritesStore.clubs.map(c => c.id))
+  const sorted = allUpcomingMatches.value
+    .filter(m => favClubIds.has(m.homeClubId) || favClubIds.has(m.awayClubId))
+    .sort((a, b) => a._date.localeCompare(b._date) || a.time.localeCompare(b.time))
+    .slice(0, 10)
+  return groupByDate(sorted)
+})
+
+const competitionUpcomingGrouped = computed(() => {
+  const favCompIds = new Set(favoritesStore.competitions.map(c => c.id))
+  const sorted = allUpcomingMatches.value
+    .filter(m => favCompIds.has(m._compId))
+    .sort((a, b) => a._date.localeCompare(b._date) || a.time.localeCompare(b.time))
+    .slice(0, 15)
+  return groupByDate(sorted)
+})
+
+async function fetchDashboardData() {
   if (!favoritesStore.hasFavorites()) return
 
-  loading.value = allMatches.value.length === 0
+  loading.value = allTodayMatches.value.length === 0
   try {
     const compIds = getCompetitionIds()
-    // Fetch uitslagen + programma for each competition in parallel
-    const fetches = compIds.flatMap(id => [
-      api.getResults(id).catch(() => []),
-      api.getFixtures(id).catch(() => []),
-    ])
-    const results = await Promise.all(fetches)
 
-    // Extract today's matches from grouped results, dedupe by matchId
+    // Fetch uitslagen and programma in parallel, tag programma with compId
+    const [uitslResults, programmaResults] = await Promise.all([
+      Promise.all(compIds.map(id => api.getResults(id).catch(() => []))),
+      Promise.all(compIds.map(id =>
+        api.getFixtures(id).then(data => ({ compId: id, data })).catch(() => ({ compId: id, data: [] }))
+      )),
+    ])
+
     const seen = new Set()
-    const matches = []
-    for (const grouped of results) {
+    const todayList = []
+    const upcomingList = []
+
+    // Process uitslagen (only today)
+    for (const grouped of uitslResults) {
       if (!Array.isArray(grouped)) continue
       for (const group of grouped) {
         if (group.date !== today) continue
         for (const match of (group.matches || [])) {
           if (!seen.has(match.matchId)) {
             seen.add(match.matchId)
-            matches.push(match)
+            todayList.push(match)
           }
         }
       }
     }
-    allMatches.value = matches
+
+    // Process programma — split into today vs upcoming
+    for (const { compId, data } of programmaResults) {
+      if (!Array.isArray(data)) continue
+      for (const group of data) {
+        for (const match of (group.matches || [])) {
+          if (seen.has(match.matchId)) continue
+          seen.add(match.matchId)
+          match._compId = compId
+          match._date = group.date
+          if (group.date === today) {
+            todayList.push(match)
+          } else {
+            upcomingList.push(match)
+          }
+        }
+      }
+    }
+
+    allTodayMatches.value = todayList
+    allUpcomingMatches.value = upcomingList
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  fetchTodayMatches()
-  refreshInterval = setInterval(fetchTodayMatches, 60_000)
+  fetchDashboardData()
+  refreshInterval = setInterval(fetchDashboardData, 60_000)
 })
 
 onUnmounted(() => {

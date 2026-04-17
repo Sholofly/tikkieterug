@@ -818,3 +818,14 @@ a { color: var(--accent); text-decoration: none; }
   transition: background 0.15s;
 }
 .dashboard-comp-link:hover { background: var(--border); }
+
+/* Collapsible sections */
+.collapse-chevron {
+  display: inline-block;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+.collapse-chevron.open {
+  transform: rotate(90deg);
+}
