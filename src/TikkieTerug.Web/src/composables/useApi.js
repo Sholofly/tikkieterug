@@ -46,5 +46,7 @@ export function useApi() {
 
     getCompetitionTopscorers: (competitionId) =>
       fetchJson(`/competitions/${competitionId}/topscorers`),
+
+    getClubInfo: (clubId) => fetchJson(`/clubs/${clubId}/info`),
   }
 }

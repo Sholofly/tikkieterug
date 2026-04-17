@@ -70,8 +70,11 @@
         </div>
 
         <!-- Date & Time -->
-        <div class="text-center text-muted text-xs" style="padding: 0.25rem 1rem 1.25rem;">
+        <div class="text-center text-muted text-xs" style="padding: 0.25rem 1rem 0.5rem;">
           {{ new Date(match.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) }}<span v-if="match.time"> · {{ match.time }}</span>
+        </div>
+        <div v-if="match.competitionName" class="text-center text-xs" style="padding: 0 1rem 1.25rem;">
+          <router-link :to="`/competition/${match.competitionId}`" class="text-muted" style="text-decoration: none;">{{ match.competitionName }}</router-link>
         </div>
       </div>
 

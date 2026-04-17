@@ -829,3 +829,49 @@ a { color: var(--accent); text-decoration: none; }
 .collapse-chevron.open {
   transform: rotate(90deg);
 }
+
+/* Fixture row with competition name */
+.fixture-row-wrap {
+  cursor: pointer;
+}
+.fixture-comp-name {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0 0 6px;
+  cursor: pointer;
+}
+.fixture-comp-name:hover {
+  color: var(--accent);
+}
+
+/* Club info tab */
+.info-row {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.info-row:last-child { border-bottom: none; }
+.info-label {
+  flex-shrink: 0;
+  width: 90px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding-top: 1px;
+}
+.info-row a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.info-row a:hover { text-decoration: underline; }
+.info-map-link {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.8rem;
+}

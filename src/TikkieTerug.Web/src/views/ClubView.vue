@@ -35,6 +35,7 @@
         <button class="tab" :class="{ active: activeTab === 'uitslagen' }" @click="activeTab = 'uitslagen'">Uitslagen</button>
         <button class="tab" :class="{ active: activeTab === 'stand' }" @click="activeTab = 'stand'">Stand</button>
         <button class="tab" :class="{ active: activeTab === 'topscorers' }" @click="activeTab = 'topscorers'">Topscorers</button>
+        <button class="tab" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">Info</button>
       </div>
 
       <!-- Programma -->
@@ -141,6 +142,50 @@
           </div>
         </div>
       </div>
+
+      <!-- Info -->
+      <div v-if="activeTab === 'info'">
+        <div v-if="infoLoading" class="loading text-center">Laden...</div>
+        <div v-else-if="!clubInfo" class="text-muted text-sm" style="padding: 12px 0;">Geen clubinformatie beschikbaar.</div>
+        <div v-else class="card">
+          <div v-if="clubInfo.fullName" class="info-row">
+            <span class="info-label">Naam</span>
+            <span>{{ clubInfo.fullName }}</span>
+          </div>
+          <div v-if="clubInfo.founded" class="info-row">
+            <span class="info-label">Opgericht</span>
+            <span>{{ clubInfo.founded }}</span>
+          </div>
+          <div v-if="clubInfo.fieldName" class="info-row">
+            <span class="info-label">Sportpark</span>
+            <span>{{ clubInfo.fieldName }}</span>
+          </div>
+          <div v-if="clubInfo.address || clubInfo.postalCode || clubInfo.city" class="info-row">
+            <span class="info-label">Adres</span>
+            <span>
+              <span v-if="clubInfo.address">{{ clubInfo.address }}</span>
+              <br v-if="clubInfo.address && (clubInfo.postalCode || clubInfo.city)" />
+              <span v-if="clubInfo.postalCode || clubInfo.city">{{ [clubInfo.postalCode, clubInfo.city].filter(Boolean).join(' ') }}</span>
+              <a
+                v-if="clubInfo.latitude && clubInfo.longitude"
+                :href="`https://www.google.com/maps/search/?api=1&query=${clubInfo.latitude},${clubInfo.longitude}`"
+                target="_blank"
+                rel="noopener"
+                class="info-map-link"
+                @click.stop
+              >📍 Kaart</a>
+            </span>
+          </div>
+          <div v-if="clubInfo.phone" class="info-row">
+            <span class="info-label">Telefoon</span>
+            <a :href="`tel:${clubInfo.phone}`">{{ clubInfo.phone }}</a>
+          </div>
+          <div v-if="clubInfo.website" class="info-row">
+            <span class="info-label">Website</span>
+            <a :href="clubInfo.website.startsWith('http') ? clubInfo.website : `https://${clubInfo.website}`" target="_blank" rel="noopener">{{ clubInfo.website }}</a>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-else class="text-center text-muted">Club niet gevonden.</div>
@@ -148,7 +193,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
@@ -167,6 +212,24 @@ const favoritesStore = useFavoritesStore()
 const data = ref(null)
 const loading = ref(true)
 const activeTab = ref('programma')
+const clubInfo = ref(null)
+const infoLoading = ref(false)
+const infoLoaded = ref(false)
+
+// Lazy-load club info when Info tab is selected
+watch(activeTab, async (tab) => {
+  if (tab === 'info' && !infoLoaded.value) {
+    infoLoading.value = true
+    try {
+      clubInfo.value = await api.getClubInfo(props.id)
+    } catch {
+      clubInfo.value = null
+    } finally {
+      infoLoading.value = false
+      infoLoaded.value = true
+    }
+  }
+})
 
 const clubId = computed(() => parseInt(props.id))
 

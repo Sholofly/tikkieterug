@@ -52,30 +52,33 @@
           <div
             v-for="match in todayMatches"
             :key="match.matchId"
-            class="fixture-row"
+            class="fixture-row-wrap"
             @click="router.push(`/match/${match.matchId}`)"
           >
-            <div class="fixture-home">
-              <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
-              <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+            <div class="fixture-row" style="cursor: pointer;">
+              <div class="fixture-home">
+                <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
+                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              </div>
+              <div class="fixture-center">
+                <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                <span
+                  v-if="match.status !== 'scheduled'"
+                  class="badge"
+                  :class="{
+                    'badge-live': match.status === 'live',
+                    'badge-halftime': match.status === 'halftime',
+                    'badge-ended': match.status === 'ended',
+                  }"
+                >{{ statusLabel(match.status) }}</span>
+              </div>
+              <div class="fixture-away">
+                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
+              </div>
             </div>
-            <div class="fixture-center">
-              <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-              <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-              <span
-                v-if="match.status !== 'scheduled'"
-                class="badge"
-                :class="{
-                  'badge-live': match.status === 'live',
-                  'badge-halftime': match.status === 'halftime',
-                  'badge-ended': match.status === 'ended',
-                }"
-              >{{ statusLabel(match.status) }}</span>
-            </div>
-            <div class="fixture-away">
-              <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-              <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
-            </div>
+            <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
           </div>
         </div>
       </div>
@@ -92,20 +95,23 @@
             <div
               v-for="match in group.matches"
               :key="match.matchId"
-              class="fixture-row"
+              class="fixture-row-wrap"
               @click="router.push(`/match/${match.matchId}`)"
             >
-              <div class="fixture-home">
-                <span>{{ match.homeClub }}</span>
-                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              <div class="fixture-row" style="cursor: pointer;">
+                <div class="fixture-home">
+                  <span>{{ match.homeClub }}</span>
+                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+                </div>
+                <div class="fixture-center">
+                  <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                </div>
+                <div class="fixture-away">
+                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                  <span>{{ match.awayClub }}</span>
+                </div>
               </div>
-              <div class="fixture-center">
-                <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-              </div>
-              <div class="fixture-away">
-                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                <span>{{ match.awayClub }}</span>
-              </div>
+              <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
             </div>
           </div>
         </template>
@@ -123,20 +129,23 @@
             <div
               v-for="match in group.matches"
               :key="match.matchId"
-              class="fixture-row"
+              class="fixture-row-wrap"
               @click="router.push(`/match/${match.matchId}`)"
             >
-              <div class="fixture-home">
-                <span>{{ match.homeClub }}</span>
-                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              <div class="fixture-row" style="cursor: pointer;">
+                <div class="fixture-home">
+                  <span>{{ match.homeClub }}</span>
+                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+                </div>
+                <div class="fixture-center">
+                  <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                </div>
+                <div class="fixture-away">
+                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                  <span>{{ match.awayClub }}</span>
+                </div>
               </div>
-              <div class="fixture-center">
-                <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-              </div>
-              <div class="fixture-away">
-                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                <span>{{ match.awayClub }}</span>
-              </div>
+              <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
             </div>
           </div>
         </template>
@@ -240,26 +249,38 @@ async function fetchDashboardData() {
   try {
     const compIds = getCompetitionIds()
 
-    // Fetch uitslagen and programma in parallel, tag programma with compId
-    const [uitslResults, programmaResults] = await Promise.all([
+    // Fetch uitslagen, programma, and competition names in parallel
+    const [uitslResults, programmaResults, nameResults] = await Promise.all([
       Promise.all(compIds.map(id => api.getResults(id).catch(() => []))),
       Promise.all(compIds.map(id =>
         api.getFixtures(id).then(data => ({ compId: id, data })).catch(() => ({ compId: id, data: [] }))
       )),
+      Promise.all(compIds.map(id =>
+        api.getCompetitionName(id).then(res => ({ id, name: res.name })).catch(() => ({ id, name: null }))
+      )),
     ])
+
+    // Build competition name lookup
+    const compNames = {}
+    for (const { id, name } of nameResults) {
+      if (name) compNames[id] = name
+    }
 
     const seen = new Set()
     const todayList = []
     const upcomingList = []
 
-    // Process uitslagen (only today)
-    for (const grouped of uitslResults) {
+    // Process uitslagen (only today) — tag with compId from the fetch index
+    for (let i = 0; i < uitslResults.length; i++) {
+      const grouped = uitslResults[i]
       if (!Array.isArray(grouped)) continue
       for (const group of grouped) {
         if (group.date !== today) continue
         for (const match of (group.matches || [])) {
           if (!seen.has(match.matchId)) {
             seen.add(match.matchId)
+            match._compId = compIds[i]
+            match._compName = compNames[compIds[i]] || null
             todayList.push(match)
           }
         }
@@ -274,6 +295,7 @@ async function fetchDashboardData() {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
           match._compId = compId
+          match._compName = compNames[compId] || null
           match._date = group.date
           if (group.date === today) {
             todayList.push(match)

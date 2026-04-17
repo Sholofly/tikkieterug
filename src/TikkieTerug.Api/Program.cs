@@ -603,9 +603,24 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
 
     // Enrich club names from DB
     var clubIds = new[] { homeId, awayId };
-    var clubNames = await db.Clubs
+    var compId = int.Parse(f[13]);
+    var clubLookupTask = db.Clubs
         .Where(c => clubIds.Contains(c.Id))
         .ToDictionaryAsync(c => c.Id, c => c.Name);
+    var compNameTask = client.PostAsync(
+        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+        new StringContent($"{{\"a\":\"{compId}\"}}", Encoding.UTF8, "application/json"));
+
+    await Task.WhenAll(clubLookupTask, compNameTask);
+    var clubNames = clubLookupTask.Result;
+
+    string? competitionName = null;
+    try
+    {
+        var compNameJson = await compNameTask.Result.Content.ReadAsStringAsync();
+        competitionName = JsonDocument.Parse(compNameJson).RootElement.GetProperty("d").GetString();
+    }
+    catch { }
 
     // Parse scorers
     // Format: [runningScore];[minute];[playerId];[playerName];[side]#...@motm;[motmPlayerId]#
@@ -702,7 +717,8 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         date = today.AddDays(dayOffset).ToString("yyyy-MM-dd"),
         time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
         status,
-        competitionId = int.Parse(f[13]),
+        competitionId = compId,
+        competitionName,
         homeClubId = homeId,
         homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
         homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
@@ -1061,6 +1077,55 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
 })
 .WithName("GetClubTeam")
 .WithDescription("Volledige teampagina data: foto, uitslagen, programma, stand, topscorers");
+
+// GET /clubs/{id}/info — club details (address, phone, website, etc.)
+app.MapGet("/clubs/{id:int}/info", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
+{
+    var club = await db.Clubs.FindAsync(id);
+    if (club == null) return Results.NotFound();
+
+    var baseClubId = club.ParentClubId ?? club.Id;
+    var speeldagRaw = club.Speeldag ?? "Zaterdag";
+    var speeldag = speeldagRaw switch
+    {
+        "Zaterdag" => "ZA",
+        "Zondag" => "ZO",
+        "Dames" => "DA",
+        _ => speeldagRaw
+    };
+    var teamNr = club.TeamNumber ?? 1;
+    var season = DateTime.Now.Month >= 8 ? DateTime.Now.Year : DateTime.Now.Year - 1;
+
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbalnederland.nl/SVC_Teams.asmx/team_details",
+        new StringContent($"{{\"c\":\"{baseClubId}\",\"s\":\"{speeldag}\",\"e\":\"{teamNr}\",\"z\":\"{season}\"}}", Encoding.UTF8, "application/json"));
+
+    var json = await response.Content.ReadAsStringAsync();
+    var raw = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    if (string.IsNullOrEmpty(raw)) return Results.NotFound();
+
+    // Fields: [0]=shortName [1]=city [2]=address [3]=postalCode [4]=fieldName [5]=phone
+    // [6]=foundedDate [7]=website [8]=? [9]=compCode [10]=clubId [11]=fullName [12]=speeldag [13]=? [14]=logoFile
+    var f = raw.TrimEnd(';').Split(';');
+
+    return Results.Ok(new
+    {
+        fullName = f.Length > 11 ? f[11] : null as string,
+        city = f.Length > 1 && !string.IsNullOrEmpty(f[1]) ? f[1] : null as string,
+        address = f.Length > 2 && !string.IsNullOrEmpty(f[2]) ? f[2] : null as string,
+        postalCode = f.Length > 3 && !string.IsNullOrEmpty(f[3]) ? f[3] : null as string,
+        fieldName = f.Length > 4 && !string.IsNullOrEmpty(f[4]) ? f[4] : null as string,
+        phone = f.Length > 5 && !string.IsNullOrEmpty(f[5]) ? f[5] : null as string,
+        founded = f.Length > 6 && !string.IsNullOrEmpty(f[6]) ? f[6] : null as string,
+        website = f.Length > 7 && !string.IsNullOrEmpty(f[7]) ? f[7] : null as string,
+        latitude = club.Latitude != 0 ? club.Latitude : (double?)null,
+        longitude = club.Longitude != 0 ? club.Longitude : (double?)null,
+    });
+})
+.WithName("GetClubInfo")
+.WithDescription("Clubgegevens: adres, telefoon, website, oprichtingsdatum");
 
 // SPA fallback: serve index.html for unmatched routes (Vue Router handles client-side routing)
 app.MapFallbackToFile("index.html");

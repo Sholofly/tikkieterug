@@ -27,6 +27,8 @@
               v-for="club in searchResults"
               :key="club.id"
               class="dropdown-item"
+              style="cursor: pointer;"
+              @click="router.push(`/club/${club.id}`)"
             >
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2 overflow-hidden">
@@ -44,11 +46,12 @@
                 <button
                   v-if="!favoritesStore.isClubFavorite(club.id)"
                   class="btn btn-sm btn-primary shrink-0"
-                  @click="addClub(club)"
+                  @mousedown.prevent
+                  @click.stop="addClub(club)"
                 >
-                  Toevoegen
+                  ☆
                 </button>
-                <span v-else class="btn btn-sm btn-outline shrink-0" disabled>Toegevoegd</span>
+                <span v-else class="btn btn-sm btn-outline shrink-0" style="pointer-events: none;">★</span>
               </div>
             </div>
           </div>
