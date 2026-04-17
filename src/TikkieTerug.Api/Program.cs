@@ -9,6 +9,7 @@ using TikkieTerug.Api.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddCors();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")
         ?? "Data Source=tikkieterug.db"));
@@ -25,6 +26,7 @@ using (var scope = app.Services.CreateScope())
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseCors(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
     app.MapOpenApi();
     app.UseSwaggerUI(options =>
     {
@@ -33,6 +35,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Serve Vue frontend static files (in Docker, dist is copied to wwwroot)
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 // POST /clubs/import — sync clubs from voetbalnederland.nl, enriched with first-team afdeling + speeldag
 app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFactory) =>
@@ -88,10 +94,10 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
         afdelingByCompetition.TryAdd(klasseId, afdelingIndex);
     }
 
-    // 3. Parse team_lijstabc responses → Dictionary<clubId, (competitionId, speeldag)>
+    // 3. Parse team_lijstabc responses → all teams per club
     //    Row format: clubId;teamNr;speeldag;seizoen;competitionId;competitionName
-    //    Only keep rows where teamNr = 1; first occurrence per club wins
-    var firstTeamMap = new Dictionary<int, (int CompetitionId, string Speeldag)>(); // clubId → (competitionId, speeldag)
+    //    A club can have multiple entries (Zaterdag, Dames, Zondag etc.)
+    var teamEntries = new List<(int ClubId, int TeamNr, int CompetitionId, string SpeeldagCode, string Speeldag)>();
     foreach (var letterTask in letterTasks)
     {
         var responseJson = await letterTask.Result.Content.ReadAsStringAsync();
@@ -102,8 +108,8 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
         {
             var fields = row.Split(';');
             if (fields.Length < 5) continue;
-            if (!int.TryParse(fields[1], out var teamNr) || teamNr != 1) continue;
             if (!int.TryParse(fields[0], out var clubId)) continue;
+            if (!int.TryParse(fields[1], out var teamNr)) continue;
             if (!int.TryParse(fields[4], out var competitionId)) continue;
 
             var speeldagCode = fields[2];
@@ -111,43 +117,70 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
             {
                 "ZA" => "Zaterdag",
                 "ZO" => "Zondag",
+                "DA" => "Dames",
                 _ => speeldagCode
             };
 
-            firstTeamMap.TryAdd(clubId, (competitionId, speeldag));
+            teamEntries.Add((clubId, teamNr, competitionId, speeldagCode, speeldag));
         }
     }
 
-    // 4. Enrich clubs with competitionId, afdelingId, and speeldag
-    foreach (var (clubId, (competitionId, speeldag)) in firstTeamMap)
+    // 4. Group by clubId, first entry enriches base club, rest become derived entries
+    var derivedTeams = new Dictionary<int, Club>(); // keyed by derived ID to deduplicate
+    var enrichedBaseClubs = new HashSet<int>(); // track which clubs already got their base enrichment
+    foreach (var entry in teamEntries)
     {
-        if (clubs.TryGetValue(clubId, out var club))
+        if (!clubs.TryGetValue(entry.ClubId, out var parentClub)) continue;
+
+        if (!enrichedBaseClubs.Contains(entry.ClubId))
         {
-            club.CompetitionId = competitionId;
-            club.Speeldag = speeldag;
-            if (afdelingByCompetition.TryGetValue(competitionId, out var afdelingIndex))
-                club.AfdelingId = afdelingIndex;
+            // First entry for this club → enrich the base club
+            enrichedBaseClubs.Add(entry.ClubId);
+            parentClub.CompetitionId = entry.CompetitionId;
+            parentClub.Speeldag = entry.Speeldag;
+            parentClub.TeamNumber = entry.TeamNr;
+            if (afdelingByCompetition.TryGetValue(entry.CompetitionId, out var afdelingIndex))
+                parentClub.AfdelingId = afdelingIndex;
+        }
+        else
+        {
+            // Additional entry → create derived team (keyed by competitionId to deduplicate)
+            var derivedId = entry.ClubId + entry.CompetitionId * 100;
+            derivedTeams.TryAdd(derivedId, new Club
+            {
+                Id = derivedId,
+                Name = $"{parentClub.Name} ({entry.Speeldag})",
+                Latitude = parentClub.Latitude,
+                Longitude = parentClub.Longitude,
+                IsActive = parentClub.IsActive,
+                CompetitionId = entry.CompetitionId,
+                Speeldag = entry.Speeldag,
+                ParentClubId = entry.ClubId,
+                TeamNumber = entry.TeamNr,
+                AfdelingId = afdelingByCompetition.TryGetValue(entry.CompetitionId, out var ai) ? ai : null
+            });
         }
     }
 
-    // 5. Upsert: remove existing, then add all
+    // 5. Upsert: remove existing, then add all (base clubs + derived teams)
     if (await db.Clubs.AnyAsync())
     {
         db.Clubs.RemoveRange(db.Clubs);
         await db.SaveChangesAsync();
     }
 
-    db.Clubs.AddRange(clubs.Values);
+    var allEntries = clubs.Values.Concat(derivedTeams.Values).ToList();
+    db.Clubs.AddRange(allEntries);
     await db.SaveChangesAsync();
 
-    var enriched = clubs.Values.Count(c => c.CompetitionId.HasValue);
-    return Results.Ok(new { imported = clubs.Count, enriched });
+    var enriched = allEntries.Count(c => c.CompetitionId.HasValue);
+    return Results.Ok(new { imported = allEntries.Count, baseClubs = clubs.Count, derivedTeams = derivedTeams.Count, enriched });
 })
 .WithName("ImportClubs")
 .WithDescription("Sync clubs vanuit voetbalnederland.nl, verrijkt met afdeling en speeldag van het eerste elftal");
 
 // GET /clubs?search=vsco&active=true
-app.MapGet("/clubs", async (AppDbContext db, string? search, bool? active) =>
+app.MapGet("/clubs", async (AppDbContext db, IHttpClientFactory httpFactory, string? search, bool? active) =>
 {
     var query = db.Clubs.AsQueryable();
 
@@ -157,42 +190,84 @@ app.MapGet("/clubs", async (AppDbContext db, string? search, bool? active) =>
     if (active.HasValue)
         query = query.Where(c => c.IsActive == active.Value);
 
-    return await query.OrderBy(c => c.Name).Take(50)
-        .Select(c => new
+    var clubs = await query.OrderBy(c => c.Name).Take(50).ToListAsync();
+
+    // Fetch competition names for unique competitionIds in parallel
+    var client = httpFactory.CreateClient();
+    var uniqueCompIds = clubs.Where(c => c.CompetitionId.HasValue)
+        .Select(c => c.CompetitionId!.Value).Distinct().ToList();
+
+    var compNames = new Dictionary<int, string>();
+    if (uniqueCompIds.Count > 0)
+    {
+        var tasks = uniqueCompIds.Select(async compId =>
         {
-            c.Id,
-            c.Name,
-            c.Latitude,
-            c.Longitude,
-            c.IsActive,
-            c.AfdelingId,
-            c.Speeldag,
-            c.CompetitionId,
-            logo = $"https://voetbalnederland.nl/l/{c.Id}.gif"
-        })
-        .ToListAsync();
+            try
+            {
+                var resp = await client.PostAsync(
+                    "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+                    new StringContent($"{{\"a\":\"{compId}\"}}", Encoding.UTF8, "application/json"));
+                var json = await resp.Content.ReadAsStringAsync();
+                var name = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+                return (compId, name: name ?? "");
+            }
+            catch { return (compId, name: ""); }
+        });
+        foreach (var result in await Task.WhenAll(tasks))
+            compNames[result.compId] = result.name;
+    }
+
+    return clubs.Select(c => new
+    {
+        c.Id,
+        c.Name,
+        c.Latitude,
+        c.Longitude,
+        c.IsActive,
+        c.AfdelingId,
+        c.Speeldag,
+        c.CompetitionId,
+        competitionName = c.CompetitionId.HasValue ? compNames.GetValueOrDefault(c.CompetitionId.Value) : (string?)null,
+        logo = $"https://voetbalnederland.nl/l/{c.ParentClubId ?? c.Id}.gif"
+    });
 })
 .WithName("SearchClubs")
 .WithDescription("Zoek clubs op naam en/of actief status");
 
 // GET /clubs/{id}
-app.MapGet("/clubs/{id:int}", async (AppDbContext db, int id) =>
+app.MapGet("/clubs/{id:int}", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
 {
     var club = await db.FindAsync<Club>(id);
-    return club is not null
-        ? Results.Ok(new
+    if (club is null) return Results.NotFound();
+
+    string? competitionName = null;
+    if (club.CompetitionId.HasValue)
+    {
+        try
         {
-            club.Id,
-            club.Name,
-            club.Latitude,
-            club.Longitude,
-            club.IsActive,
-            club.AfdelingId,
-            club.Speeldag,
-            club.CompetitionId,
-            logo = $"https://voetbalnederland.nl/l/{club.Id}.gif"
-        })
-        : Results.NotFound();
+            var client = httpFactory.CreateClient();
+            var resp = await client.PostAsync(
+                "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+                new StringContent($"{{\"a\":\"{club.CompetitionId.Value}\"}}", Encoding.UTF8, "application/json"));
+            var json = await resp.Content.ReadAsStringAsync();
+            competitionName = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+        }
+        catch { }
+    }
+
+    return Results.Ok(new
+    {
+        club.Id,
+        club.Name,
+        club.Latitude,
+        club.Longitude,
+        club.IsActive,
+        club.AfdelingId,
+        club.Speeldag,
+        club.CompetitionId,
+        competitionName,
+        logo = $"https://voetbalnederland.nl/l/{club.ParentClubId ?? club.Id}.gif"
+    });
 })
 .WithName("GetClub");
 
@@ -290,6 +365,22 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
 })
 .WithName("GetCompetitionUitslagen")
 .WithDescription("Alle uitslagen in een competitie, gegroepeerd op datum");
+
+// GET /competitions/{id}/naam — competition name
+app.MapGet("/competitions/{id:int}/naam", async (IHttpClientFactory httpFactory, int id) =>
+{
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+        new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
+
+    var json = await response.Content.ReadAsStringAsync();
+    var name = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    return string.IsNullOrEmpty(name) ? Results.NotFound() : Results.Ok(new { id, name });
+})
+.WithName("GetCompetitionName")
+.WithDescription("Naam van een competitie");
 
 // GET /competitions/{id}/stand — current standings of a competition, including period title won
 app.MapGet("/competitions/{id:int}/stand", async (IHttpClientFactory httpFactory, int id) =>
@@ -526,5 +617,8 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
 })
 .WithName("GetMatch")
 .WithDescription("Wedstrijddetails inclusief doelpuntenmakers");
+
+// SPA fallback: serve index.html for unmatched routes (Vue Router handles client-side routing)
+app.MapFallbackToFile("index.html");
 
 app.Run();

@@ -10,4 +10,6 @@ public class Club
     public int? AfdelingId { get; set; }
     public string? Speeldag { get; set; }
     public int? CompetitionId { get; set; }
+    public int? ParentClubId { get; set; }
+    public int? TeamNumber { get; set; }
 }

@@ -1,19 +1,24 @@
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
-WORKDIR /app
-EXPOSE 8080
+# --- Build Vue frontend ---
+FROM oven/bun:1 AS frontend
+WORKDIR /web
+COPY src/TikkieTerug.Web/package.json src/TikkieTerug.Web/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY src/TikkieTerug.Web/ .
+RUN bun run build
 
+# --- Build .NET API ---
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY ["src/TikkieTerug.Api/TikkieTerug.Api.csproj", "src/TikkieTerug.Api/"]
 RUN dotnet restore "src/TikkieTerug.Api/TikkieTerug.Api.csproj"
-COPY . .
+COPY src/TikkieTerug.Api/ src/TikkieTerug.Api/
 WORKDIR "/src/src/TikkieTerug.Api"
-RUN dotnet build "TikkieTerug.Api.csproj" -c Release -o /app/build
-
-FROM build AS publish
 RUN dotnet publish "TikkieTerug.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM base AS final
+# --- Runtime ---
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
+COPY --from=frontend /web/dist ./wwwroot/
+EXPOSE 8080
 ENTRYPOINT ["dotnet", "TikkieTerug.Api.dll"]

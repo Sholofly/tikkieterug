@@ -1,0 +1,14 @@
+{
+  "name": "TikkieTerug",
+  "short_name": "TikkieTerug",
+  "description": "Live voetbalstanden en uitslagen",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1e3a5f",
+  "background_color": "#0f172a",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/favicon.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
