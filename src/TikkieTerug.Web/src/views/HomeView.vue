@@ -67,7 +67,9 @@
                   <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
                 </div>
                 <div class="fixture-center">
-                  <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                  <span v-if="match.status && match.status !== 'scheduled'" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended' }">{{ statusLabel(match.status) }}</span>
                 </div>
                 <div class="fixture-away">
                   <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
@@ -101,7 +103,9 @@
                   <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
                 </div>
                 <div class="fixture-center">
-                  <span class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                  <span v-if="match.status && match.status !== 'scheduled'" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended' }">{{ statusLabel(match.status) }}</span>
                 </div>
                 <div class="fixture-away">
                   <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
@@ -149,16 +153,6 @@ function statusLabel(status) {
 function formatDateShort(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
-// Collect unique competition IDs from both favorite clubs and competitions
-function getCompetitionIds() {
-  const ids = new Set()
-  for (const comp of favoritesStore.competitions) ids.add(comp.id)
-  for (const club of favoritesStore.clubs) {
-    if (club.competitionId) ids.add(club.competitionId)
-  }
-  return [...ids]
 }
 
 // Sort: live first, halftime, scheduled, ended last
@@ -209,15 +203,30 @@ async function fetchDashboardData() {
 
   loading.value = allTodayMatches.value.length === 0
   try {
-    const compIds = getCompetitionIds()
+    const favClubs = favoritesStore.clubs
+    const favComps = favoritesStore.competitions
 
-    // Fetch uitslagen, programma, and competition names in parallel
-    const [uitslResults, programmaResults, nameResults] = await Promise.all([
-      Promise.all(compIds.map(id => api.getResults(id).catch(() => []))),
-      Promise.all(compIds.map(id =>
-        api.getFixtures(id).then(data => ({ compId: id, data })).catch(() => ({ compId: id, data: [] }))
+    // Collect all competition IDs we need names for
+    const allCompIds = new Set()
+    for (const club of favClubs) { if (club.competitionId) allCompIds.add(club.competitionId) }
+    for (const comp of favComps) { allCompIds.add(comp.id) }
+    const compIdArr = [...allCompIds]
+
+    // Fetch in parallel:
+    // 1. Per favorite club: team_programma1 (has live status) + team uitslagen (for ended today)
+    // 2. Per favorite competition: programma + uitslagen (for matches not involving fav clubs)
+    // 3. Competition names
+    const [clubProgrammaResults, compUitslResults, compProgrammaResults, nameResults] = await Promise.all([
+      Promise.all(favClubs.map(club =>
+        api.getClubProgramma(club.id)
+          .then(data => ({ clubId: club.id, compId: club.competitionId, data }))
+          .catch(() => ({ clubId: club.id, compId: club.competitionId, data: [] }))
       )),
-      Promise.all(compIds.map(id =>
+      Promise.all(compIdArr.map(id => api.getResults(id).catch(() => []))),
+      Promise.all(favComps.map(comp =>
+        api.getFixtures(comp.id).then(data => ({ compId: comp.id, data })).catch(() => ({ compId: comp.id, data: [] }))
+      )),
+      Promise.all(compIdArr.map(id =>
         api.getCompetitionName(id).then(res => ({ id, name: res.name })).catch(() => ({ id, name: null }))
       )),
     ])
@@ -232,25 +241,44 @@ async function fetchDashboardData() {
     const todayList = []
     const upcomingList = []
 
-    // Process uitslagen (only today) — tag with compId from the fetch index
-    for (let i = 0; i < uitslResults.length; i++) {
-      const grouped = uitslResults[i]
-      if (!Array.isArray(grouped)) continue
-      for (const group of grouped) {
-        if (group.date !== today) continue
+    // 1. Process club programma (team_programma1) — has real-time status
+    for (const { compId, data } of clubProgrammaResults) {
+      if (!Array.isArray(data)) continue
+      for (const group of data) {
         for (const match of (group.matches || [])) {
-          if (!seen.has(match.matchId)) {
-            seen.add(match.matchId)
-            match._compId = compIds[i]
-            match._compName = compNames[compIds[i]] || null
+          if (seen.has(match.matchId)) continue
+          seen.add(match.matchId)
+          match._compId = match.competitionId || compId
+          match._compName = compNames[match._compId] || null
+          match._date = group.date
+          if (group.date === today) {
             todayList.push(match)
+          } else {
+            upcomingList.push(match)
           }
         }
       }
     }
 
-    // Process programma — split into today vs upcoming
-    for (const { compId, data } of programmaResults) {
+    // 2. Process competition uitslagen (for today's ended matches not already seen)
+    for (let i = 0; i < compUitslResults.length; i++) {
+      const grouped = compUitslResults[i]
+      if (!Array.isArray(grouped)) continue
+      for (const group of grouped) {
+        if (group.date !== today) continue
+        for (const match of (group.matches || [])) {
+          if (seen.has(match.matchId)) continue
+          seen.add(match.matchId)
+          match._compId = compIdArr[i]
+          match._compName = compNames[compIdArr[i]] || null
+          match._date = group.date
+          todayList.push(match)
+        }
+      }
+    }
+
+    // 3. Process competition programma (for fav comp upcoming not already seen)
+    for (const { compId, data } of compProgrammaResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
         for (const match of (group.matches || [])) {
@@ -264,6 +292,27 @@ async function fetchDashboardData() {
           } else {
             upcomingList.push(match)
           }
+        }
+      }
+    }
+
+    // 4. Enrich today's "scheduled" matches with real-time status via wedstrijd_data
+    const scheduledToday = todayList.filter(m => !m.status || m.status === 'scheduled')
+    if (scheduledToday.length > 0) {
+      const enriched = await Promise.all(
+        scheduledToday.map(m =>
+          api.getMatch(m.matchId)
+            .then(detail => ({ matchId: m.matchId, status: detail.status, homeScore: detail.homeScore, awayScore: detail.awayScore }))
+            .catch(() => null)
+        )
+      )
+      for (const detail of enriched) {
+        if (!detail || detail.status === 'scheduled') continue
+        const match = todayList.find(m => m.matchId === detail.matchId)
+        if (match) {
+          match.status = detail.status
+          match.homeScore = detail.homeScore
+          match.awayScore = detail.awayScore
         }
       }
     }

@@ -58,7 +58,7 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
     var letters = Enumerable.Range('A', 26).Select(c => (char)c).ToArray();
     var letterTasks = letters.Select(letter =>
         client.PostAsync(
-            "https://voetbalnederland.nl/SVC_Teams.asmx/team_lijstabc",
+            "https://voetbaloost.nl/SVC_Teams.asmx/team_lijstabc",
             new StringContent($"{{\"letter\":\"{letter}\"}}", Encoding.UTF8, "application/json"))
     ).ToArray();
 
@@ -217,7 +217,7 @@ app.MapGet("/clubs", async (AppDbContext db, IHttpClientFactory httpFactory, str
             try
             {
                 var resp = await client.PostAsync(
-                    "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+                    "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_naam",
                     new StringContent($"{{\"a\":\"{compId}\"}}", Encoding.UTF8, "application/json"));
                 var json = await resp.Content.ReadAsStringAsync();
                 var name = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
@@ -259,7 +259,7 @@ app.MapGet("/clubs/{id:int}", async (AppDbContext db, IHttpClientFactory httpFac
         {
             var client = httpFactory.CreateClient();
             var resp = await client.PostAsync(
-                "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+                "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_naam",
                 new StringContent($"{{\"a\":\"{club.CompetitionId.Value}\"}}", Encoding.UTF8, "application/json"));
             var json = await resp.Content.ReadAsStringAsync();
             competitionName = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
@@ -288,7 +288,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_uitslagen1",
+        "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_uitslagen1",
         new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -383,7 +383,7 @@ app.MapGet("/competitions/{id:int}/naam", async (IHttpClientFactory httpFactory,
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+        "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_naam",
         new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -399,7 +399,7 @@ app.MapGet("/competitions/{id:int}/stand", async (IHttpClientFactory httpFactory
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Ranglijst.asmx/ranglijst_klasse",
+        "https://voetbaloost.nl/SVC_Ranglijst.asmx/ranglijst_klasse",
         new StringContent($"{{\"k\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -447,7 +447,7 @@ app.MapGet("/competitions/{id:int}/periodestand", async (IHttpClientFactory http
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Ranglijst.asmx/periodestand",
+        "https://voetbaloost.nl/SVC_Ranglijst.asmx/periodestand",
         new StringContent($"{{\"k\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -508,7 +508,7 @@ app.MapGet("/competitions/{id:int}/topscorers", async (IHttpClientFactory httpFa
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Sterren.asmx/klasse_topscorers",
+        "https://voetbaloost.nl/SVC_Sterren.asmx/klasse_topscorers",
         new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -552,10 +552,10 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
 
     // Fetch match data and scorers in parallel
     var matchTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Uitslagen.asmx/wedstrijd_data",
+        "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
         new StringContent($"{{\"w\":\"{id}\",\"s\":\"1\"}}", Encoding.UTF8, "application/json"));
     var scrTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Verslagen.asmx/scr",
+        "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
         new StringContent($"{{\"s\":\"1\",\"w\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     await Task.WhenAll(matchTask, scrTask);
@@ -575,7 +575,10 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     var today = DateOnly.FromDateTime(DateTime.Today);
     var dayOffset = int.Parse(f[5]);
     var gespeeld = f[4] == "True" || f[4] == "1";
-    var statusCode = gespeeld ? 3 : int.Parse(f[6]);
+    var rawStatus = int.Parse(f[6]);
+    // wedstrijd_data sets gespeeld=True once match starts, not just when ended.
+    // Only force to "ended" if gespeeld=true AND rawStatus is 0 (no live status).
+    var statusCode = (gespeeld && rawStatus == 0) ? 3 : rawStatus;
 
     // Conditionally fire verslag requests based on report flags f[11] (home) and f[12] (away)
     var hasHomeReport = f.Length > 11 && f[11] == "1";
@@ -583,12 +586,12 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
 
     Task<HttpResponseMessage>? homeReportTask = hasHomeReport
         ? client.PostAsync(
-            "https://voetbalnederland.nl/SVC_Verslagen.asmx/wvt",
+            "https://voetbaloost.nl/SVC_Verslagen.asmx/wvt",
             new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"1\"}}", Encoding.UTF8, "application/json"))
         : null;
     Task<HttpResponseMessage>? awayReportTask = hasAwayReport
         ? client.PostAsync(
-            "https://voetbalnederland.nl/SVC_Verslagen.asmx/wvu",
+            "https://voetbaloost.nl/SVC_Verslagen.asmx/wvu",
             new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"1\"}}", Encoding.UTF8, "application/json"))
         : null;
 
@@ -614,7 +617,7 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         .Where(c => clubIds.Contains(c.Id))
         .ToDictionaryAsync(c => c.Id, c => c.Name);
     var compNameTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+        "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_naam",
         new StringContent($"{{\"a\":\"{compId}\"}}", Encoding.UTF8, "application/json"));
 
     await Task.WhenAll(clubLookupTask, compNameTask);
@@ -751,7 +754,7 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_programma1",
+        "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_programma1",
         new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -821,6 +824,94 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
 .WithName("GetCompetitionProgramma")
 .WithDescription("Aankomend programma van een competitie, gegroepeerd op datum");
 
+// GET /clubs/{id}/programma — team fixtures from team_programma1 (includes live status)
+app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
+{
+    var club = await db.FindAsync<Club>(id);
+    if (club is null) return Results.NotFound();
+
+    var sdCode = club.Speeldag switch
+    {
+        "Zaterdag" => "ZA", "Zondag" => "ZO", "Dames" => "DA",
+        _ => club.Speeldag ?? "ZA"
+    };
+    var seizoen = (DateTime.Now.Month >= 8 ? DateTime.Now.Year : DateTime.Now.Year - 1).ToString();
+    var clubIdStr = (club.ParentClubId ?? club.Id).ToString();
+
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbaloost.nl/SVC_Teams.asmx/team_programma1",
+        new StringContent($"{{\"id\":\"{clubIdStr}\",\"sd\":\"{sdCode}\",\"seizoen\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
+    var json = await response.Content.ReadAsStringAsync();
+    var data = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    if (string.IsNullOrEmpty(data)) return Results.Ok(Array.Empty<object>());
+
+    var rows = data.Split('#', StringSplitOptions.RemoveEmptyEntries);
+    var today = DateOnly.FromDateTime(DateTime.Today);
+
+    var clubIds = rows.SelectMany(r =>
+    {
+        var f = r.Split(';');
+        return new[] { int.Parse(f[0]), int.Parse(f[1]) };
+    }).Distinct().ToArray();
+
+    var clubNames = await db.Clubs
+        .Where(c => clubIds.Contains(c.Id))
+        .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+    var grouped = rows
+        .Select(r =>
+        {
+            var f = r.Split(';');
+            var homeId = int.Parse(f[0]);
+            var awayId = int.Parse(f[1]);
+            var dayOffset = int.Parse(f[5]);
+            var matchDate = today.AddDays(dayOffset);
+            var gespeeld = int.Parse(f[4]);
+            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+            var status = statusCode switch
+            {
+                0 => "scheduled", 1 => "live", 2 => "halftime",
+                3 => "ended", 4 => "suspended", 5 => "cancelled",
+                _ => "unknown"
+            };
+            return new
+            {
+                date = matchDate.ToString("yyyy-MM-dd"),
+                homeClubId = homeId,
+                homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
+                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                awayClubId = awayId,
+                awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
+                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                homeScore = int.Parse(f[2]),
+                awayScore = int.Parse(f[3]),
+                status,
+                time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                matchId = long.Parse(f[17]),
+                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
+            };
+        })
+        .GroupBy(m => m.date)
+        .OrderBy(g => g.Key)
+        .Select(g => new
+        {
+            date = g.Key,
+            matches = g.Select(m => new
+            {
+                m.homeClubId, m.homeClub, m.homeLogo,
+                m.awayClubId, m.awayClub, m.awayLogo,
+                m.homeScore, m.awayScore, m.status,
+                m.time, m.matchId, m.competitionId
+            })
+        });
+
+    return Results.Ok(grouped);
+})
+.WithName("GetClubProgramma")
+.WithDescription("Programma van een club met live status, gegroepeerd op datum");
+
 // GET /clubs/{id}/team — full team page data (photo, results, fixtures, standings, top scorers)
 app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
 {
@@ -844,24 +935,24 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
 
     // Fire ALL requests in parallel
     var uitslagenTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Teams.asmx/team_uitslagen1",
+        "https://voetbaloost.nl/SVC_Teams.asmx/team_uitslagen1",
         new StringContent($"{{\"id\":\"{clubIdStr}\",\"sd\":\"{sdCode}\",\"seizoen\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var programmaTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Teams.asmx/team_programma1",
+        "https://voetbaloost.nl/SVC_Teams.asmx/team_programma1",
         new StringContent($"{{\"id\":\"{clubIdStr}\",\"sd\":\"{sdCode}\",\"seizoen\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var topscorersTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Teams.asmx/topscorerat",
+        "https://voetbaloost.nl/SVC_Teams.asmx/topscorerat",
         new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var standTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Ranglijst.asmx/rang_team",
+        "https://voetbaloost.nl/SVC_Ranglijst.asmx/rang_team",
         new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var fotoTask = client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Teams.asmx/selFoto",
+        "https://voetbaloost.nl/SVC_Teams.asmx/selFoto",
         new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     // Also get competition name if available
     Task<HttpResponseMessage>? compNameTask = club.CompetitionId.HasValue
         ? client.PostAsync(
-            "https://voetbalnederland.nl/SVC_Klasse.asmx/klasse_naam",
+            "https://voetbaloost.nl/SVC_Klasse.asmx/klasse_naam",
             new StringContent($"{{\"a\":\"{club.CompetitionId.Value}\"}}", Encoding.UTF8, "application/json"))
         : null;
 
@@ -1104,7 +1195,7 @@ app.MapGet("/clubs/{id:int}/info", async (AppDbContext db, IHttpClientFactory ht
 
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Teams.asmx/team_details",
+        "https://voetbaloost.nl/SVC_Teams.asmx/team_details",
         new StringContent($"{{\"c\":\"{baseClubId}\",\"s\":\"{speeldag}\",\"e\":\"{teamNr}\",\"z\":\"{season}\"}}", Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
@@ -1138,7 +1229,7 @@ app.MapGet("/matches/history", async (IHttpClientFactory httpFactory, int home, 
 {
     var client = httpFactory.CreateClient();
     var response = await client.PostAsync(
-        "https://voetbalnederland.nl/SVC_Uitslagen.asmx/wedstrijd_historie",
+        "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_historie",
         new StringContent($"{{\"a1\":\"{home}\",\"a2\":\"{away}\",\"tcat\":\"{homeCat}\",\"ucat\":\"{awayCat}\"}}", System.Text.Encoding.UTF8, "application/json"));
 
     var json = await response.Content.ReadAsStringAsync();
