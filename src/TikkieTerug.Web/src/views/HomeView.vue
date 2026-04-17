@@ -1,46 +1,9 @@
 <template>
   <div class="page-header">
-    <h1>Dashboard</h1>
+    <h1>Wedstrijden</h1>
   </div>
 
   <div class="content">
-    <!-- No favorites -->
-    <div v-if="!favoritesStore.hasFavorites()" class="empty">
-      <p>Je hebt nog geen favoriete competities of clubs toegevoegd.</p>
-      <router-link to="/favorites" class="btn btn-primary" style="display: inline-block; margin-top: 12px;">Voeg favorieten toe</router-link>
-    </div>
-
-    <template v-else>
-      <!-- Favorite clubs -->
-      <div v-if="favoritesStore.clubs.length > 0" class="card" style="margin-bottom: 10px;">
-        <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Mijn clubs</div>
-        <div class="dashboard-icons">
-          <router-link
-            v-for="club in favoritesStore.clubs"
-            :key="club.id"
-            :to="`/club/${club.id}`"
-            class="dashboard-icon-link"
-          >
-            <img :src="club.logo" :alt="club.name" class="club-logo" />
-          </router-link>
-        </div>
-      </div>
-
-      <!-- Favorite competitions -->
-      <div v-if="favoritesStore.competitions.length > 0" class="card" style="margin-bottom: 10px;">
-        <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Mijn competities</div>
-        <div class="dashboard-icons">
-          <router-link
-            v-for="comp in favoritesStore.competitions"
-            :key="comp.id"
-            :to="`/competition/${comp.id}`"
-            class="dashboard-comp-link"
-          >
-            {{ comp.name }}
-          </router-link>
-        </div>
-      </div>
-
       <!-- Today's matches -->
       <div style="margin-top: 16px;">
         <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">Vandaag</div>
@@ -150,7 +113,6 @@
           </div>
         </template>
       </div>
-    </template>
   </div>
 </template>
 

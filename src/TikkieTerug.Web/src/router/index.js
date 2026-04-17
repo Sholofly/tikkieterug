@@ -7,9 +7,28 @@ const routes = [
     component: () => import('../views/HomeView.vue')
   },
   {
-    path: '/favorites',
+    path: '/nieuws',
+    name: 'nieuws',
+    component: () => import('../views/NieuwsView.vue')
+  },
+  {
+    path: '/competities',
+    name: 'competities',
+    component: () => import('../views/CompetitiesView.vue')
+  },
+  {
+    path: '/volgt',
     name: 'favorites',
     component: () => import('../views/FavoritesView.vue')
+  },
+  {
+    path: '/favorites',
+    redirect: '/volgt'
+  },
+  {
+    path: '/meer',
+    name: 'meer',
+    component: () => import('../views/MeerView.vue')
   },
   {
     path: '/competition/:id',
