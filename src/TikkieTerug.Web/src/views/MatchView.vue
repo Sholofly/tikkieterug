@@ -1,19 +1,31 @@
 <template>
   <div class="content">
-    <div v-if="loading" class="loading text-center">Loading match details...</div>
+    <div v-if="loading" class="loading text-center">Wedstrijd laden...</div>
 
     <div v-else-if="match">
+      <!-- Sticky compact header -->
+      <div class="match-sticky-header" :class="{ visible: showStickyHeader }">
+        <div class="match-sticky-inner">
+          <img v-if="match.homeLogo" :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click="router.push(`/club/${match.homeClubId}`)" />
+          <span class="match-sticky-name">{{ match.homeClub }}</span>
+          <span class="match-sticky-score">{{ match.homeScore ?? '-' }} – {{ match.awayScore ?? '-' }}</span>
+          <span class="match-sticky-name">{{ match.awayClub }}</span>
+          <img v-if="match.awayLogo" :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click="router.push(`/club/${match.awayClubId}`)" />
+        </div>
+      </div>
+
       <!-- Match Header -->
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="flex items-center justify-between gap-3" style="padding: 1.5rem 1rem 0.5rem;">
+      <div ref="headerCard" class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; align-items: flex-start; gap: 8px; padding: 1.5rem 1rem 0.5rem;">
           <!-- Home Club -->
-          <div class="text-center" style="flex: 1;">
+          <div class="text-center">
             <img
               v-if="match.homeLogo"
               :src="match.homeLogo"
               :alt="match.homeClub"
               class="club-logo-lg"
-              style="display: block; margin: 0 auto 0.5rem;"
+              style="display: block; margin: 0 auto 0.5rem; cursor: pointer;"
+              @click="router.push(`/club/${match.homeClubId}`)"
             />
             <div v-else class="club-logo-lg" style="display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; background: #eee; border-radius: 50%; font-size: 1.5rem;">⚽</div>
             <div class="font-bold">{{ match.homeClub }}</div>
@@ -23,20 +35,31 @@
           </div>
 
           <!-- Score -->
-          <div class="text-center" style="flex: 0 0 auto; min-width: 7rem;">
+          <div class="text-center" style="min-width: 7rem;">
             <div class="font-bold" style="font-size: 2.5rem; line-height: 1.1; letter-spacing: 2px;">
               {{ match.homeScore ?? '-' }} – {{ match.awayScore ?? '-' }}
             </div>
+            <span
+              class="badge"
+              style="margin-top: 0.5rem;"
+              :class="{
+                'badge-live': match.status === 'live',
+                'badge-halftime': match.status === 'halftime',
+                'badge-ended': match.status === 'ended',
+                'badge-scheduled': match.status === 'scheduled',
+              }"
+            >{{ statusLabel }}</span>
           </div>
 
           <!-- Away Club -->
-          <div class="text-center" style="flex: 1;">
+          <div class="text-center">
             <img
               v-if="match.awayLogo"
               :src="match.awayLogo"
               :alt="match.awayClub"
               class="club-logo-lg"
-              style="display: block; margin: 0 auto 0.5rem;"
+              style="display: block; margin: 0 auto 0.5rem; cursor: pointer;"
+              @click="router.push(`/club/${match.awayClubId}`)"
             />
             <div v-else class="club-logo-lg" style="display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; background: #eee; border-radius: 50%; font-size: 1.5rem;">⚽</div>
             <div class="font-bold">{{ match.awayClub }}</div>
@@ -46,20 +69,9 @@
           </div>
         </div>
 
-        <!-- Date, Time & Status -->
-        <div class="text-center" style="padding: 0.5rem 1rem 1.25rem;">
-          <div class="text-muted text-sm" style="margin-bottom: 0.5rem;">
-            {{ match.date }}<span v-if="match.time"> &middot; {{ match.time }}</span>
-          </div>
-          <span
-            class="badge"
-            :class="{
-              'badge-live': match.status === 'live',
-              'badge-halftime': match.status === 'halftime',
-              'badge-ended': match.status === 'ended',
-              'badge-scheduled': match.status === 'scheduled',
-            }"
-          >{{ statusLabel }}</span>
+        <!-- Date & Time -->
+        <div class="text-center text-muted text-xs" style="padding: 0.25rem 1rem 1.25rem;">
+          {{ new Date(match.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) }}<span v-if="match.time"> · {{ match.time }}</span>
         </div>
       </div>
 
@@ -101,11 +113,30 @@
       </div>
 
       <div v-else class="text-center text-muted text-sm" style="margin-top: 1rem;">
-        No goals recorded yet.
+        Nog geen doelpunten.
+      </div>
+
+      <!-- Wedstrijdverslagen -->
+      <div v-if="match.homeReport || match.awayReport" style="margin-top: 1rem;">
+        <div v-if="match.homeReport" class="card verslag-card">
+          <div class="verslag-header">
+            <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" />
+            <span class="font-bold">{{ match.homeReport.title }}</span>
+          </div>
+          <div class="verslag-text">{{ match.homeReport.text }}</div>
+        </div>
+
+        <div v-if="match.awayReport" class="card verslag-card">
+          <div class="verslag-header">
+            <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" />
+            <span class="font-bold">{{ match.awayReport.title }}</span>
+          </div>
+          <div class="verslag-text">{{ match.awayReport.text }}</div>
+        </div>
       </div>
     </div>
 
-    <div v-else class="text-center text-muted">Match not found.</div>
+    <div v-else class="text-center text-muted">Wedstrijd niet gevonden.</div>
   </div>
 </template>
 
@@ -126,7 +157,10 @@ const api = useApi()
 
 const match = ref(null)
 const loading = ref(true)
+const showStickyHeader = ref(false)
+const headerCard = ref(null)
 let refreshInterval = null
+let observer = null
 
 async function fetchMatch() {
   try {
@@ -142,9 +176,9 @@ async function fetchMatch() {
 const statusLabel = computed(() => {
   switch (match.value?.status) {
     case 'live': return 'Live'
-    case 'halftime': return 'Half-time'
-    case 'ended': return 'Ended'
-    case 'scheduled': return 'Scheduled'
+    case 'halftime': return 'Rust'
+    case 'ended': return 'Afgelopen'
+    case 'scheduled': return 'Gepland'
     default: return match.value?.status ?? ''
   }
 })
@@ -167,17 +201,29 @@ const goalsWithScore = computed(() => {
   })
 })
 
+function setupStickyObserver() {
+  if (!headerCard.value) return
+  observer = new IntersectionObserver(
+    ([entry]) => {
+      showStickyHeader.value = !entry.isIntersecting
+    },
+    { threshold: 0, rootMargin: '-60px 0px 0px 0px' }
+  )
+  observer.observe(headerCard.value)
+}
+
 onMounted(async () => {
   await fetchMatch()
 
   if (match.value?.status === 'live' || match.value?.status === 'halftime') {
     refreshInterval = setInterval(fetchMatch, 30000)
   }
+
+  setTimeout(setupStickyObserver, 100)
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+  if (refreshInterval) clearInterval(refreshInterval)
+  if (observer) observer.disconnect()
 })
 </script>

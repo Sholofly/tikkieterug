@@ -6,4 +6,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
+    volumes:
+      - app-data:/app/data
+      - ./config.json:/app/wwwroot/config.json:ro
+    restart: unless-stopped
+
+volumes:
+  app-data:

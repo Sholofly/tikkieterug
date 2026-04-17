@@ -32,14 +32,28 @@
           </router-link>
         </div>
 
-        <!-- Match rows for most recent match day -->
+        <!-- Match rows grouped by date -->
         <template v-if="resultsByCompetition[competition.id]?.length">
-          <div
-            v-for="match in resultsByCompetition[competition.id]"
-            :key="match.matchId"
-            class="match-row"
-            @click="router.push({ name: 'match', params: { id: match.matchId } })"
+          <template
+            v-for="group in resultsByCompetition[competition.id]"
+            :key="group.date"
           >
+            <div class="date-group">{{ formatDate(group.date) }}</div>
+            <div
+              v-for="match in group.matches"
+              :key="match.matchId"
+              class="match-row"
+              @click="router.push({ name: 'match', params: { id: match.matchId } })"
+            >
+            <span
+              class="badge match-row-badge"
+              :class="{
+                'badge-live': match.status === 'live',
+                'badge-halftime': match.status === 'halftime',
+                'badge-ended': match.status === 'ended',
+                'badge-scheduled': match.status === 'scheduled',
+              }"
+            >{{ statusLabel(match.status) }}</span>
             <!-- Home team -->
             <div class="match-teams">
               <div class="match-team flex items-center gap-2">
@@ -48,31 +62,18 @@
                   :src="match.homeLogo"
                   :alt="match.homeClub"
                   class="club-logo-sm"
+                  style="cursor: pointer;"
+                  @click.stop="router.push(`/club/${match.homeClubId}`)"
                 />
                 <span :class="{ 'font-bold': match.homeScore > match.awayScore && match.status === 'ended' }">
                   {{ match.homeClub }}
                 </span>
               </div>
 
-              <!-- Score / status -->
+              <!-- Score -->
               <div class="match-score">
-                <template v-if="match.status === 'live'">
-                  <div class="status-indicator live"></div>
-                  <span class="score-line text-live">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                </template>
-                <template v-else-if="match.status === 'halftime'">
-                  <div class="status-indicator halftime"></div>
-                  <span class="score-line text-halftime">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                </template>
-                <template v-else-if="match.status === 'ended'">
-                  <div class="status-indicator ended"></div>
-                  <span class="score-line font-bold">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                </template>
-                <template v-else>
-                  <!-- scheduled -->
-                  <div class="status-indicator scheduled"></div>
-                  <span class="score-line text-muted">{{ match.time }}</span>
-                </template>
+                <span v-if="match.status !== 'scheduled'" class="score-line font-bold">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                <span v-else class="score-line text-muted">{{ match.time }}</span>
               </div>
 
               <!-- Away team -->
@@ -82,6 +83,8 @@
                   :src="match.awayLogo"
                   :alt="match.awayClub"
                   class="club-logo-sm"
+                  style="cursor: pointer;"
+                  @click.stop="router.push(`/club/${match.awayClubId}`)"
                 />
                 <span :class="{ 'font-bold': match.awayScore > match.homeScore && match.status === 'ended' }">
                   {{ match.awayClub }}
@@ -89,6 +92,7 @@
               </div>
             </div>
           </div>
+          </template>
         </template>
 
         <p v-else class="text-muted text-sm">Geen recente wedstrijden gevonden.</p>
@@ -110,6 +114,24 @@ const favoritesStore = useFavoritesStore()
 const loading = ref(false)
 const resultsByCompetition = ref({})
 
+const today = new Date().toISOString().slice(0, 10)
+
+function statusLabel(status) {
+  switch (status) {
+    case 'live': return 'Live'
+    case 'halftime': return 'Rust'
+    case 'ended': return 'Afgelopen'
+    case 'scheduled': return 'Gepland'
+    default: return status ?? ''
+  }
+}
+
+function formatDate(dateStr) {
+  if (dateStr === today) return 'Vandaag'
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
 let refreshInterval = null
 
 async function fetchAllResults() {
@@ -120,9 +142,7 @@ async function fetchAllResults() {
     const entries = await Promise.all(
       favoritesStore.competitions.map(async (competition) => {
         const grouped = await api.getResults(competition.id)
-        // grouped is sorted descending by date — take the first group (most recent match day)
-        const mostRecent = grouped?.[0]?.matches ?? []
-        return [competition.id, mostRecent]
+        return [competition.id, grouped ?? []]
       })
     )
     resultsByCompetition.value = Object.fromEntries(entries)

@@ -5,54 +5,58 @@
     </div>
 
     <div class="search-box">
-      <input
-        v-model="searchTerm"
-        class="search-input"
-        type="text"
-        placeholder="Zoek een club..."
-        autocomplete="off"
-      />
-    </div>
-
-    <div class="content">
-      <!-- Search results -->
-      <div v-if="searchTerm.length >= 2">
-        <div v-if="isSearching" class="loading">Zoeken...</div>
-        <div v-else-if="searchResults.length === 0 && !isSearching" class="empty text-muted">
-          Geen clubs gevonden voor "{{ searchTerm }}".
-        </div>
-        <div v-else>
-          <div
-            v-for="club in searchResults"
-            :key="club.id"
-            class="card mb-2"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <img
-                  v-if="club.logo"
-                  :src="club.logo"
-                  :alt="club.name"
-                  class="club-logo-sm"
-                />
-                <div class="flex flex-col">
-                  <span class="font-bold truncate">{{ club.name }}</span>
-                  <span v-if="club.competitionName" class="text-xs text-muted">{{ club.competitionName }}</span>
+      <div class="search-container">
+        <input
+          v-model="searchTerm"
+          class="search-input"
+          type="text"
+          placeholder="Zoek een club..."
+          autocomplete="off"
+          @focus="isDropdownOpen = true"
+          @blur="handleBlur"
+        />
+        
+        <!-- Search dropdown -->
+        <div v-if="searchTerm.length >= 2 && isDropdownOpen" class="search-dropdown">
+          <div v-if="isSearching" class="dropdown-item text-center text-muted py-3">Zoeken...</div>
+          <div v-else-if="searchResults.length === 0 && !isSearching" class="dropdown-item text-center text-muted py-3">
+            Geen clubs gevonden voor "{{ searchTerm }}".
+          </div>
+          <div v-else class="dropdown-list">
+            <div
+              v-for="club in searchResults"
+              :key="club.id"
+              class="dropdown-item"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 overflow-hidden">
+                  <img
+                    v-if="club.logo"
+                    :src="club.logo"
+                    :alt="club.name"
+                    class="club-logo-sm shrink-0"
+                  />
+                  <div class="flex flex-col min-w-0">
+                    <span class="font-bold truncate">{{ club.name }}</span>
+                    <span v-if="club.competitionName" class="text-xs text-muted truncate">{{ club.competitionName }}</span>
+                  </div>
                 </div>
+                <button
+                  v-if="!favoritesStore.isClubFavorite(club.id)"
+                  class="btn btn-sm btn-primary shrink-0"
+                  @click="addClub(club)"
+                >
+                  Toevoegen
+                </button>
+                <span v-else class="btn btn-sm btn-outline shrink-0" disabled>Toegevoegd</span>
               </div>
-              <button
-                v-if="!favoritesStore.isClubFavorite(club.id)"
-                class="btn btn-sm btn-primary"
-                @click="addClub(club)"
-              >
-                Toevoegen
-              </button>
-              <span v-else class="btn btn-sm btn-outline" disabled>Toegevoegd</span>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
+    <div class="content">
       <!-- Favorite clubs -->
       <section class="mt-4">
         <h2 class="font-bold mb-2">Mijn clubs</h2>
@@ -63,6 +67,8 @@
           v-for="club in favoritesStore.clubs"
           :key="club.id"
           class="card mb-2"
+          style="cursor: pointer;"
+          @click="router.push(`/club/${club.id}`)"
         >
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2">
@@ -79,7 +85,7 @@
             </div>
             <button
               class="btn btn-sm btn-danger"
-              @click="favoritesStore.removeClub(club.id)"
+              @click.stop="favoritesStore.removeClub(club.id)"
             >
               Verwijderen
             </button>
@@ -132,6 +138,13 @@ const favoritesStore = useFavoritesStore()
 const searchTerm = ref('')
 const searchResults = ref([])
 const isSearching = ref(false)
+const isDropdownOpen = ref(false)
+
+function handleBlur() {
+  setTimeout(() => {
+    isDropdownOpen.value = false
+  }, 200)
+}
 
 let debounceTimer = null
 let searchCounter = 0

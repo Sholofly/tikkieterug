@@ -1,7 +1,20 @@
-const BASE = import.meta.env.DEV ? '/api' : ''
+let _base = null
+
+async function getBase() {
+  if (_base !== null) return _base
+  try {
+    const res = await fetch('/config.json')
+    const config = await res.json()
+    _base = config.apiUrl || (import.meta.env.DEV ? '/api' : '')
+  } catch {
+    _base = import.meta.env.DEV ? '/api' : ''
+  }
+  return _base
+}
 
 async function fetchJson(path) {
-  const res = await fetch(`${BASE}${path}`)
+  const base = await getBase()
+  const res = await fetch(`${base}${path}`)
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`)
   return res.json()
 }
@@ -12,6 +25,8 @@ export function useApi() {
       fetchJson(`/clubs?search=${encodeURIComponent(search)}&active=${active}`),
 
     getClub: (id) => fetchJson(`/clubs/${id}`),
+
+    getClubTeam: (id) => fetchJson(`/clubs/${id}/team`),
 
     getStandings: (competitionId) =>
       fetchJson(`/competitions/${competitionId}/stand`),
@@ -25,5 +40,8 @@ export function useApi() {
     getMatch: (matchId) => fetchJson(`/matches/${matchId}`),
 
     getCompetitionName: (competitionId) => fetchJson(`/competitions/${competitionId}/naam`),
+
+    getFixtures: (competitionId) =>
+      fetchJson(`/competitions/${competitionId}/programma`),
   }
 }
