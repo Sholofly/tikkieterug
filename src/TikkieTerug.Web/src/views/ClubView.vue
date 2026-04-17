@@ -29,14 +29,14 @@
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab" :class="{ active: activeTab === 'programma' }" @click="activeTab = 'programma'">Programma</button>
-        <button class="tab" :class="{ active: activeTab === 'uitslagen' }" @click="activeTab = 'uitslagen'">Uitslagen</button>
-        <button class="tab" :class="{ active: activeTab === 'stand' }" @click="activeTab = 'stand'">Stand</button>
-        <button class="tab" :class="{ active: activeTab === 'topscorers' }" @click="activeTab = 'topscorers'">Topscorers</button>
-        <button class="tab" :class="{ active: activeTab === 'info' }" @click="activeTab = 'info'">Info</button>
-      </div>
+      <!-- Tab selector -->
+      <select class="tab-select" v-model="activeTab">
+        <option value="programma">📅 Programma</option>
+        <option value="uitslagen">⚽ Uitslagen</option>
+        <option value="stand">📊 Stand</option>
+        <option value="topscorers">🥇 Topscorers</option>
+        <option value="info">ℹ️ Info</option>
+      </select>
 
       <!-- Programma -->
       <div v-if="activeTab === 'programma'">

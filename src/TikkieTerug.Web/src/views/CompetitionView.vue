@@ -9,33 +9,13 @@
       >{{ isFavorite ? '★ Favoriet' : '☆ Favoriet' }}</button>
     </div>
 
-    <div class="tabs">
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'stand' }"
-        @click="switchTab('stand')"
-      >Stand</button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'uitslagen' }"
-        @click="switchTab('uitslagen')"
-      >Uitslagen</button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'programma' }"
-        @click="switchTab('programma')"
-      >Programma</button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'periodes' }"
-        @click="switchTab('periodes')"
-      >Periodes</button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'topscorers' }"
-        @click="switchTab('topscorers')"
-      >Topscorers</button>
-    </div>
+    <select class="tab-select" v-model="activeTab">
+      <option value="stand">📊 Stand</option>
+      <option value="uitslagen">⚽ Uitslagen</option>
+      <option value="programma">📅 Programma</option>
+      <option value="periodes">📋 Periodes</option>
+      <option value="topscorers">🥇 Topscorers</option>
+    </select>
 
     <!-- Stand Tab -->
     <div v-if="activeTab === 'stand'">

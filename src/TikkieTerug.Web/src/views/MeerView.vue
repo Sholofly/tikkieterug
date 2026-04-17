@@ -18,11 +18,24 @@
           ⚙️ Systeem
         </button>
       </div>
+      <div v-if="themeStore.theme === 'system'" class="theme-hint">
+        Volgt apparaatinstelling (nu: {{ resolvedTheme }})
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useThemeStore } from '../stores/theme'
+
 const themeStore = useThemeStore()
+const systemIsDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+function onMediaChange(e) { systemIsDark.value = e.matches }
+onMounted(() => mediaQuery.addEventListener('change', onMediaChange))
+onUnmounted(() => mediaQuery.removeEventListener('change', onMediaChange))
+
+const resolvedTheme = computed(() => systemIsDark.value ? 'donker' : 'licht')
 </script>
