@@ -1,10 +1,10 @@
 # --- Build Vue frontend ---
-FROM oven/bun:latest AS frontend
+FROM node:22-slim AS frontend
 WORKDIR /web
-COPY src/TikkieTerug.Web/package.json src/TikkieTerug.Web/bun.lock ./
-RUN bun install --frozen-lockfile
+COPY src/TikkieTerug.Web/package.json ./
+RUN npm install
 COPY src/TikkieTerug.Web/ .
-RUN bun run build
+RUN npx vite build
 
 # --- Build .NET API ---
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
