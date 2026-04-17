@@ -150,9 +150,15 @@ a { color: var(--accent); text-decoration: none; }
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 1.3rem;
+  font-size: 1.4rem;
+  font-weight: bold;
   cursor: pointer;
-  padding: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border-radius: 50%;
   transition: background 0.15s;
 }
@@ -875,3 +881,26 @@ a { color: var(--accent); text-decoration: none; }
   margin-left: 8px;
   font-size: 0.8rem;
 }
+
+/* Match history */
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+.history-row:last-child { border-bottom: none; }
+.history-row:hover { background: var(--bg-card-alt); }
+.history-season {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.history-score {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.history-win { color: #16a34a; }
+.history-loss { color: #dc2626; }

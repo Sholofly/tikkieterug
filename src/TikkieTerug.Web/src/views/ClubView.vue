@@ -112,6 +112,8 @@
             :key="row.clubId"
             class="standings-row compact-team"
             :class="{ 'highlight-row': row.clubId === (data.club.id ?? parseInt(id)) }"
+            style="cursor: pointer;"
+            @click="router.push(`/club/${row.clubId}`)"
           >
             <span class="standings-pos">{{ row.position }}</span>
             <span><img :src="row.logo" class="club-logo-sm" :alt="row.club" /></span>
@@ -282,7 +284,12 @@ function statusLabel(status) {
 // Compact stand grid: only 5 columns (no detailed toggle needed - use competition page for that)
 // Highlight current club's row
 
-onMounted(async () => {
+async function fetchClub() {
+  loading.value = true
+  data.value = null
+  clubInfo.value = null
+  infoLoaded.value = false
+  activeTab.value = 'programma'
   try {
     data.value = await api.getClubTeam(props.id)
   } catch (e) {
@@ -290,5 +297,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+watch(() => props.id, fetchClub)
+
+onMounted(fetchClub)
 </script>

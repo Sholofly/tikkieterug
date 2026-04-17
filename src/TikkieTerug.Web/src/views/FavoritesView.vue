@@ -7,11 +7,12 @@
     <div class="search-box">
       <div class="search-container">
         <input
-          v-model="searchTerm"
+          :value="searchTerm"
           class="search-input"
-          type="text"
+          type="search"
           placeholder="Zoek een club..."
           autocomplete="off"
+          @input="onSearchInput"
           @focus="isDropdownOpen = true"
           @blur="handleBlur"
         />
@@ -129,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
@@ -152,7 +153,10 @@ function handleBlur() {
 let debounceTimer = null
 let searchCounter = 0
 
-watch(searchTerm, (value) => {
+function onSearchInput(e) {
+  const value = e.target.value
+  searchTerm.value = value
+  isDropdownOpen.value = true
   clearTimeout(debounceTimer)
   searchResults.value = []
 
@@ -166,7 +170,7 @@ watch(searchTerm, (value) => {
   debounceTimer = setTimeout(async () => {
     try {
       const results = await api.searchClubs(value)
-      if (thisSearch !== searchCounter) return  // stale response, ignore
+      if (thisSearch !== searchCounter) return
       searchResults.value = results
     } catch (e) {
       if (thisSearch !== searchCounter) return
@@ -177,7 +181,7 @@ watch(searchTerm, (value) => {
       }
     }
   }, 300)
-})
+}
 
 function addClub(club) {
   favoritesStore.addClub({

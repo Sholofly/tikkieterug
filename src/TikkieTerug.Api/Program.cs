@@ -131,10 +131,16 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
         }
     }
 
-    // 4. Group by clubId, first entry enriches base club, rest become derived entries
+    // 4. Group by clubId — prefer Zaterdag/Zondag for base club, Dames becomes derived
+    //    Sort so ZA/ZO come first, DA last → first entry enriches the base club
+    var speeldagPriority = new Dictionary<string, int> { ["ZA"] = 0, ["ZO"] = 1, ["DA"] = 2 };
+    var sortedEntries = teamEntries
+        .OrderBy(e => speeldagPriority.GetValueOrDefault(e.SpeeldagCode, 9))
+        .ToList();
+
     var derivedTeams = new Dictionary<int, Club>(); // keyed by derived ID to deduplicate
     var enrichedBaseClubs = new HashSet<int>(); // track which clubs already got their base enrichment
-    foreach (var entry in teamEntries)
+    foreach (var entry in sortedEntries)
     {
         if (!clubs.TryGetValue(entry.ClubId, out var parentClub)) continue;
 
@@ -150,8 +156,8 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
         }
         else
         {
-            // Additional entry → create derived team (keyed by competitionId to deduplicate)
-            var derivedId = entry.ClubId + entry.CompetitionId * 100;
+            // Additional entry → create derived team (stable ID from clubId + competitionId)
+            var derivedId = unchecked(entry.ClubId + entry.CompetitionId * 100);
             derivedTeams.TryAdd(derivedId, new Club
             {
                 Id = derivedId,
@@ -1126,6 +1132,38 @@ app.MapGet("/clubs/{id:int}/info", async (AppDbContext db, IHttpClientFactory ht
 })
 .WithName("GetClubInfo")
 .WithDescription("Clubgegevens: adres, telefoon, website, oprichtingsdatum");
+
+// GET /matches/history?home={clubId}&away={clubId}&homeCat={ZA}&awayCat={ZA}
+app.MapGet("/matches/history", async (IHttpClientFactory httpFactory, int home, int away, string homeCat, string awayCat) =>
+{
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbalnederland.nl/SVC_Uitslagen.asmx/wedstrijd_historie",
+        new StringContent($"{{\"a1\":\"{home}\",\"a2\":\"{away}\",\"tcat\":\"{homeCat}\",\"ucat\":\"{awayCat}\"}}", System.Text.Encoding.UTF8, "application/json"));
+
+    var json = await response.Content.ReadAsStringAsync();
+    var raw = System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    if (string.IsNullOrEmpty(raw)) return Results.Ok(Array.Empty<object>());
+
+    var results = new List<object>();
+    foreach (var row in raw.Split('#', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var f = row.Split(';');
+        if (f.Length < 8) continue;
+        results.Add(new
+        {
+            season = f[0],
+            homeScore = int.Parse(f[2]),
+            awayScore = int.Parse(f[3]),
+            matchId = long.Parse(f[7])
+        });
+    }
+
+    return Results.Ok(results);
+})
+.WithName("GetMatchHistory")
+.WithDescription("Onderlinge historie tussen twee clubs");
 
 // SPA fallback: serve index.html for unmatched routes (Vue Router handles client-side routing)
 app.MapFallbackToFile("index.html");

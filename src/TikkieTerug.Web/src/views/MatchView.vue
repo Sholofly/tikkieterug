@@ -137,6 +137,29 @@
           <div class="verslag-text">{{ match.awayReport.text }}</div>
         </div>
       </div>
+
+      <!-- Onderlinge historie -->
+      <div v-if="history.length > 0" style="margin-top: 1rem;">
+        <div class="card">
+          <div style="padding: 1rem 1rem 0.5rem; border-bottom: 1px solid var(--border);">
+            <span class="font-bold">Onderlinge historie</span>
+          </div>
+          <div style="padding: 0.5rem 0;">
+            <div
+              v-for="item in history"
+              :key="item.matchId"
+              class="history-row"
+              @click="router.push(`/match/${item.matchId}`)"
+            >
+              <span class="history-season">{{ item.season }}/{{ String(Number(item.season) + 1).slice(2) }}</span>
+              <span class="history-score" :class="{
+                'history-win': item.homeScore > item.awayScore,
+                'history-loss': item.homeScore < item.awayScore,
+              }">{{ item.homeScore }} – {{ item.awayScore }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-else class="text-center text-muted">Wedstrijd niet gevonden.</div>
@@ -162,6 +185,7 @@ const match = ref(null)
 const loading = ref(true)
 const showStickyHeader = ref(false)
 const headerCard = ref(null)
+const history = ref([])
 let refreshInterval = null
 let observer = null
 
@@ -174,6 +198,15 @@ async function fetchMatch() {
   } finally {
     loading.value = false
   }
+}
+
+async function fetchHistory() {
+  if (!match.value) return
+  try {
+    history.value = await api.getMatchHistory(
+      match.value.homeClubId, match.value.awayClubId, 'ZA', 'ZA'
+    )
+  } catch { history.value = [] }
 }
 
 const statusLabel = computed(() => {
@@ -217,6 +250,7 @@ function setupStickyObserver() {
 
 onMounted(async () => {
   await fetchMatch()
+  await fetchHistory()
 
   if (match.value?.status === 'live' || match.value?.status === 'halftime') {
     refreshInterval = setInterval(fetchMatch, 30000)
