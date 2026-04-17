@@ -296,18 +296,18 @@ async function fetchDashboardData() {
       }
     }
 
-    // 4. Enrich today's "scheduled" matches with real-time status via wedstrijd_data
-    const scheduledToday = todayList.filter(m => !m.status || m.status === 'scheduled')
-    if (scheduledToday.length > 0) {
+    // 4. Enrich today's non-ended matches with real-time data (score fields from list endpoints lag behind)
+    const toEnrich = todayList.filter(m => m.status !== 'ended')
+    if (toEnrich.length > 0) {
       const enriched = await Promise.all(
-        scheduledToday.map(m =>
+        toEnrich.map(m =>
           api.getMatch(m.matchId)
             .then(detail => ({ matchId: m.matchId, status: detail.status, homeScore: detail.homeScore, awayScore: detail.awayScore }))
             .catch(() => null)
         )
       )
       for (const detail of enriched) {
-        if (!detail || detail.status === 'scheduled') continue
+        if (!detail) continue
         const match = todayList.find(m => m.matchId === detail.matchId)
         if (match) {
           match.status = detail.status

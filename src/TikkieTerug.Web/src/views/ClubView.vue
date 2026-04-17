@@ -196,7 +196,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
 
@@ -208,18 +208,21 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const api = useApi()
 const favoritesStore = useFavoritesStore()
 
+const validTabs = ['programma', 'uitslagen', 'stand', 'topscorers', 'info']
 const data = ref(null)
 const loading = ref(true)
-const activeTab = ref('programma')
+const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'programma')
 const clubInfo = ref(null)
 const infoLoading = ref(false)
 const infoLoaded = ref(false)
 
-// Lazy-load club info when Info tab is selected
+// Sync tab to URL and lazy-load info
 watch(activeTab, async (tab) => {
+  router.replace({ query: { ...route.query, tab } })
   if (tab === 'info' && !infoLoaded.value) {
     infoLoading.value = true
     try {
@@ -284,12 +287,12 @@ function statusLabel(status) {
 // Compact stand grid: only 5 columns (no detailed toggle needed - use competition page for that)
 // Highlight current club's row
 
-async function fetchClub() {
+async function fetchClub(resetTab = true) {
   loading.value = true
   data.value = null
   clubInfo.value = null
   infoLoaded.value = false
-  activeTab.value = 'programma'
+  if (resetTab) activeTab.value = 'programma'
   try {
     data.value = await api.getClubTeam(props.id)
   } catch (e) {
@@ -299,7 +302,7 @@ async function fetchClub() {
   }
 }
 
-watch(() => props.id, fetchClub)
+watch(() => props.id, () => fetchClub(true))
 
-onMounted(fetchClub)
+onMounted(() => fetchClub(false))
 </script>

@@ -227,7 +227,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
 
@@ -239,6 +239,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const api = useApi()
 const favoritesStore = useFavoritesStore()
 
@@ -256,7 +257,13 @@ function toggleFavorite() {
   }
 }
 
-const activeTab = ref('stand')
+const validTabs = ['stand', 'uitslagen', 'programma', 'periodes', 'topscorers']
+const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'stand')
+
+// Sync tab to URL query
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
 const detailedStand = ref(false)
 
 const standings = ref([])

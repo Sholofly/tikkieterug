@@ -316,7 +316,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
     // [12]=awayReport [13]=compId [14]=soort [15]=cixVoor [16]=cixTegen [17]=matchId
     // Status: 0=niet gestart, 1=bezig, 2=rust, 3=afgelopen, 4=gestaakt, 5=afgelast
     // Note: if gespeeld==1, status is forced to 3 (afgelopen)
-    var grouped = rows
+    var parsed = rows
         .Select(r =>
         {
             var f = r.Split(';');
@@ -352,6 +352,52 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 matchId = long.Parse(f[17])
             };
         })
+        .ToList();
+
+    // Enrich live/halftime matches with real-time scores from goals endpoint
+    var liveMatches = parsed.Where(m => m.status is "live" or "halftime").ToList();
+    var enriched = new Dictionary<long, (int home, int away)>();
+    if (liveMatches.Count > 0)
+    {
+        var scrTasks = liveMatches.Select(m => new
+        {
+            m.matchId,
+            task = client.PostAsync(
+                "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
+                new StringContent($"{{\"s\":\"1\",\"w\":\"{m.matchId}\"}}", Encoding.UTF8, "application/json"))
+        }).ToList();
+
+        await Task.WhenAll(scrTasks.Select(t => t.task));
+
+        foreach (var t in scrTasks)
+        {
+            try
+            {
+                var scrJson = await t.task.Result.Content.ReadAsStringAsync();
+                var scrData = JsonDocument.Parse(scrJson).RootElement.GetProperty("d").GetString();
+                if (!string.IsNullOrEmpty(scrData))
+                {
+                    var goalsSection = scrData.Split('@')[0];
+                    var goals = goalsSection.Split('#', StringSplitOptions.RemoveEmptyEntries);
+                    var homeGoals = goals.Count(g => g.Split(';').Length >= 5 && g.Split(';')[4] == "0");
+                    var awayGoals = goals.Count(g => g.Split(';').Length >= 5 && g.Split(';')[4] == "5");
+                    enriched[t.matchId] = (homeGoals, awayGoals);
+                }
+            }
+            catch { }
+        }
+    }
+
+    var grouped = parsed
+        .Select(m => new
+        {
+            m.date,
+            m.homeClubId, m.homeClub, m.homeLogo,
+            m.awayClubId, m.awayClub, m.awayLogo,
+            homeScore = enriched.TryGetValue(m.matchId, out var e) ? e.home : m.homeScore,
+            awayScore = enriched.TryGetValue(m.matchId, out var e2) ? e2.away : m.awayScore,
+            m.status, m.time, m.matchId
+        })
         .GroupBy(m => m.date)
         .OrderByDescending(g => g.Key)
         .Select(g => new
@@ -359,17 +405,10 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
             date = g.Key,
             matches = g.Select(m => new
             {
-                m.homeClubId,
-                m.homeClub,
-                homeLogo = $"https://voetbalnederland.nl/l/{m.homeClubId}.gif",
-                m.awayClubId,
-                m.awayClub,
-                awayLogo = $"https://voetbalnederland.nl/l/{m.awayClubId}.gif",
-                m.homeScore,
-                m.awayScore,
-                m.status,
-                m.time,
-                m.matchId
+                m.homeClubId, m.homeClub, m.homeLogo,
+                m.awayClubId, m.awayClub, m.awayLogo,
+                m.homeScore, m.awayScore,
+                m.status, m.time, m.matchId
             })
         });
 
@@ -720,6 +759,15 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         catch { /* silently ignore verslag fetch/parse errors */ }
     }
 
+    // For live/halftime matches, derive score from goals (fields [2]/[3] can lag behind)
+    var homeScore = int.Parse(f[2]);
+    var awayScore = int.Parse(f[3]);
+    if (status is "live" or "halftime" && scorers.Count > 0)
+    {
+        homeScore = scorers.Count(s => ((dynamic)s).side == "home");
+        awayScore = scorers.Count(s => ((dynamic)s).side == "away");
+    }
+
     var result = new
     {
         matchId = id,
@@ -734,8 +782,8 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         awayClubId = awayId,
         awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
         awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
-        homeScore = int.Parse(f[2]),
-        awayScore = int.Parse(f[3]),
+        homeScore,
+        awayScore,
         homeRedCards = int.Parse(f[7]),
         awayRedCards = int.Parse(f[8]),
         manOfTheMatchId,
