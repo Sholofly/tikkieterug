@@ -1,5 +1,5 @@
 # --- Build Vue frontend ---
-FROM oven/bun:1 AS frontend
+FROM oven/bun:latest AS frontend
 WORKDIR /web
 COPY src/TikkieTerug.Web/package.json src/TikkieTerug.Web/bun.lock ./
 RUN bun install --frozen-lockfile
