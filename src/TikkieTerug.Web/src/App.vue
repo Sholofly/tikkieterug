@@ -46,7 +46,7 @@ const closeMenu = () => {
     <div class="drawer-links">
       <router-link to="/" class="drawer-item" :class="{ active: route.name === 'home' }" @click="closeMenu">
         <span class="drawer-icon">&#9917;</span>
-        <span>Live</span>
+        <span>Dashboard</span>
       </router-link>
       <router-link to="/favorites" class="drawer-item" :class="{ active: route.name === 'favorites' }" @click="closeMenu">
         <span class="drawer-icon">&#9734;</span>

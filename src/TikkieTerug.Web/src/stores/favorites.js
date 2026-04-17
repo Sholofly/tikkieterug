@@ -35,10 +35,6 @@ export const useFavoritesStore = defineStore('favorites', () => {
         competitionName: club.competitionName,
         logo: club.logo
       })
-      // Auto-add competition if club has one
-      if (club.competitionId) {
-        addCompetition({ id: club.competitionId, name: club.competitionName || `Competitie ${club.competitionId}` })
-      }
     }
   }
 

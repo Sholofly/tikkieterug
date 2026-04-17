@@ -496,6 +496,48 @@ app.MapGet("/competitions/{id:int}/periodestand", async (IHttpClientFactory http
 .WithName("GetCompetitionPeriodestand")
 .WithDescription("Stand per periode van een competitie");
 
+// GET /competitions/{id}/topscorers — top scorers of a competition
+app.MapGet("/competitions/{id:int}/topscorers", async (IHttpClientFactory httpFactory, int id) =>
+{
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbalnederland.nl/SVC_Sterren.asmx/klasse_topscorers",
+        new StringContent($"{{\"a\":\"{id}\"}}", Encoding.UTF8, "application/json"));
+
+    var json = await response.Content.ReadAsStringAsync();
+    var data = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    if (string.IsNullOrEmpty(data)) return Results.Ok(Array.Empty<object>());
+
+    // Fields (@-separated, #-separated rows):
+    // [0]=playerId [1]=name [2]=compId [3]=compCode [4]=goals
+    // [5]=clubName [6]=clubId [7]=speeldag [8]=played [9]=?
+    // [10]=logoFile [11]=? [12]=totalGoals
+    var topscorers = data.Split('#', StringSplitOptions.RemoveEmptyEntries)
+        .Select(r =>
+        {
+            var f = r.Split('@');
+            var clubId = int.Parse(f[6]);
+            return new
+            {
+                playerId = int.Parse(f[0]),
+                name = f[1].Trim(),
+                goals = int.Parse(f[4]),
+                totalGoals = int.TryParse(f[12], out var t) ? t : 0,
+                played = int.TryParse(f[8], out var p) ? p : 0,
+                club = f[5],
+                clubId,
+                logo = $"https://voetbalnederland.nl/l/{clubId}.gif"
+            };
+        })
+        .OrderByDescending(t => t.goals)
+        .ToList();
+
+    return Results.Ok(topscorers);
+})
+.WithName("GetCompetitionTopscorers")
+.WithDescription("Topscorers van een competitie");
+
 // GET /matches/{id} — match details with scorers
 app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory httpFactory, long id) =>
 {

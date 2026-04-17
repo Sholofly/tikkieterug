@@ -10,7 +10,7 @@
 
       <!-- Club header -->
       <div class="card" style="margin-bottom: 10px;">
-        <div class="flex items-center gap-2" style="margin-bottom: 8px;">
+        <div class="flex items-center gap-2">
           <img :src="data.club.logo" :alt="data.club.name" class="club-logo-lg" />
           <div>
             <h1 class="font-bold" style="font-size: 1.2rem;">{{ data.club.name }}</h1>
@@ -20,11 +20,10 @@
               class="text-sm"
             >{{ data.club.competitionName || 'Competitie' }}</router-link>
           </div>
-        </div>
-        <div class="flex items-center gap-2">
           <button
-            class="toggle-detail"
+            class="btn-favorite"
             :class="isFavorite ? 'active' : ''"
+            style="margin-left: auto;"
             @click="toggleFavorite"
           >{{ isFavorite ? '★ Favoriet' : '☆ Favoriet' }}</button>
         </div>
@@ -41,26 +40,24 @@
       <!-- Programma -->
       <div v-if="activeTab === 'programma'">
         <div v-if="data.programma.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen aankomende wedstrijden.</div>
-        <div v-else>
-          <div v-for="group in data.programma" :key="group.date" class="date-group">
-            <div class="text-sm text-muted">{{ formatDate(group.date) }}</div>
-            <div class="card">
-              <div
-                v-for="match in group.matches"
-                :key="match.matchId"
-                class="fixture-row"
-                @click="router.push(`/match/${match.matchId}`)"
-              >
-                 <div class="fixture-home">
-                  <span>{{ match.homeClub }}</span>
-                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-                </div>
-                <div class="fixture-time">{{ match.time }}</div>
-                <div class="fixture-away">
-                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span>{{ match.awayClub }}</span>
-                </div>
-              </div>
+        <div v-else class="card">
+          <div
+            v-for="match in allProgramma"
+            :key="match.matchId"
+            class="fixture-row"
+            @click="router.push(`/match/${match.matchId}`)"
+          >
+            <div class="fixture-home">
+              <span>{{ match.homeClub }}</span>
+              <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+            </div>
+            <div class="fixture-center" style="min-width: 70px;">
+              <span class="text-xs text-muted">{{ formatDateShort(match.date) }}</span>
+              <span class="fixture-time" style="font-size: 0.8rem;">{{ match.time }}</span>
+            </div>
+            <div class="fixture-away">
+              <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+              <span>{{ match.awayClub }}</span>
             </div>
           </div>
         </div>
@@ -69,43 +66,30 @@
       <!-- Uitslagen -->
       <div v-if="activeTab === 'uitslagen'">
         <div v-if="data.uitslagen.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen uitslagen.</div>
-        <div v-else>
-          <div v-for="group in data.uitslagen" :key="group.date" class="date-group">
-            <div class="text-sm text-muted">{{ formatDate(group.date) }}</div>
-            <div class="card">
-              <div
-                v-for="match in group.matches"
-                :key="match.matchId"
-                class="fixture-row"
-                @click="router.push(`/match/${match.matchId}`)"
-              >
-                <div class="fixture-home">
-                  <span>{{ match.homeClub }}</span>
-                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-                </div>
-                <div class="fixture-center">
-                  <span v-if="match.status !== 'scheduled'" class="fixture-score">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                  <span v-else class="fixture-score text-muted">{{ match.time }}</span>
-                  <span
-                    class="badge"
-                    :class="{
-                      'badge-live': match.status === 'live',
-                      'badge-halftime': match.status === 'halftime',
-                      'badge-ended': match.status === 'ended',
-                      'badge-scheduled': match.status === 'scheduled',
-                    }"
-                  >{{ statusLabel(match.status) }}</span>
-                </div>
-                <div class="fixture-away">
-                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span>{{ match.awayClub }}</span>
-                </div>
-                <!-- Report indicators -->
-                <div v-if="match.homeReport || match.awayReport" class="report-indicators">
-                  <span v-if="match.homeReport" class="report-icon" title="Thuisverslag">📝</span>
-                  <span v-if="match.awayReport" class="report-icon" title="Uitverslag">📝</span>
-                </div>
-              </div>
+        <div v-else class="card">
+          <div
+            v-for="match in allUitslagen"
+            :key="match.matchId"
+            class="fixture-row"
+            @click="router.push(`/match/${match.matchId}`)"
+          >
+            <div class="fixture-home">
+              <span>{{ match.homeClub }}</span>
+              <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+            </div>
+            <div class="fixture-center" style="min-width: 70px;">
+              <span class="text-xs text-muted">{{ formatDateShort(match.date) }}</span>
+              <span v-if="match.status !== 'scheduled'" class="fixture-score">{{ match.homeScore }} – {{ match.awayScore }}</span>
+              <span v-else class="fixture-score text-muted">{{ match.time }}</span>
+            </div>
+            <div class="fixture-away">
+              <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+              <span>{{ match.awayClub }}</span>
+            </div>
+            <!-- Report indicators -->
+            <div v-if="match.homeReport || match.awayReport" class="report-indicators">
+              <span v-if="match.homeReport" class="report-icon" title="Thuisverslag">📝</span>
+              <span v-if="match.awayReport" class="report-icon" title="Uitverslag">📝</span>
             </div>
           </div>
         </div>
@@ -141,7 +125,7 @@
       <div v-if="activeTab === 'topscorers'">
         <div v-if="data.topscorers.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen topscorers.</div>
         <div v-else class="card">
-          <div class="topscorer-row header">
+          <div class="topscorer-row three-col header">
             <span class="topscorer-name">Speler</span>
             <span class="topscorer-num">Seizoen</span>
             <span class="topscorer-num">Totaal</span>
@@ -149,7 +133,7 @@
           <div
             v-for="player in data.topscorers"
             :key="player.playerId"
-            class="topscorer-row"
+            class="topscorer-row three-col"
           >
             <span class="topscorer-name">{{ player.name }}</span>
             <span class="topscorer-num font-bold">{{ player.goalsThisSeason }}</span>
@@ -184,12 +168,14 @@ const data = ref(null)
 const loading = ref(true)
 const activeTab = ref('programma')
 
-const isFavorite = computed(() => favoritesStore.isClubFavorite(props.id))
+const clubId = computed(() => parseInt(props.id))
+
+const isFavorite = computed(() => favoritesStore.isClubFavorite(clubId.value))
 
 function toggleFavorite() {
   if (!data.value) return
   if (isFavorite.value) {
-    favoritesStore.removeClub(props.id)
+    favoritesStore.removeClub(clubId.value)
   } else {
     favoritesStore.addClub({
       id: data.value.club.id,
@@ -207,6 +193,24 @@ function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
 }
+
+function formatDateShort(dateStr) {
+  const today = new Date().toISOString().slice(0, 10)
+  if (dateStr === today) return 'Vandaag'
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+// Flatten programma groups into a single sorted list
+const allProgramma = computed(() => {
+  if (!data.value?.programma) return []
+  return data.value.programma.flatMap(g => g.matches.map(m => ({ ...m, date: g.date })))
+})
+
+const allUitslagen = computed(() => {
+  if (!data.value?.uitslagen) return []
+  return data.value.uitslagen.flatMap(g => g.matches.map(m => ({ ...m, date: g.date })))
+})
 
 function statusLabel(status) {
   return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status

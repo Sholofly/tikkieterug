@@ -377,7 +377,7 @@ a { color: var(--accent); text-decoration: none; }
   top: calc(100% + 4px);
   left: 0;
   width: 100%;
-  background: #2d3f54;
+  background: var(--bg-card);
   border: 1px solid var(--accent-dim);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -562,6 +562,9 @@ a { color: var(--accent); text-decoration: none; }
 .standings-row.compact {
   grid-template-columns: 28px 28px 1fr 32px 36px 36px;
 }
+.standings-row.periodes {
+  grid-template-columns: 28px 28px 1fr 32px 32px 32px 32px 36px;
+}
 .standings-row.detailed {
   grid-template-columns: 28px 28px minmax(90px, 1fr) 32px 32px 32px 32px 32px 32px 36px 36px;
 }
@@ -584,6 +587,22 @@ a { color: var(--accent); text-decoration: none; }
   padding: 3px 10px;
   font-size: 0.75rem;
   cursor: pointer;
+}
+.btn-favorite {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-favorite.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
 }
 .penalty-marker { color: var(--red); font-weight: 700; }
 .penalty-note {
@@ -737,11 +756,14 @@ a { color: var(--accent); text-decoration: none; }
 /* Topscorer rows */
 .topscorer-row {
   display: grid;
-  grid-template-columns: 1fr 56px 56px;
+  grid-template-columns: 1fr 56px;
   align-items: center;
   padding: 8px 0;
   font-size: 0.85rem;
   border-bottom: 1px solid var(--border);
+}
+.topscorer-row.three-col {
+  grid-template-columns: 1fr 56px 56px;
 }
 .topscorer-row:last-child { border-bottom: none; }
 .topscorer-row.header {
@@ -750,7 +772,7 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 0.7rem;
   border-bottom: 2px solid var(--border);
 }
-.topscorer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topscorer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; flex-direction: column; gap: 2px; }
 .topscorer-num { text-align: center; font-variant-numeric: tabular-nums; }
 
 /* Report indicators (📝 icons on match rows) */
@@ -764,3 +786,35 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1;
 }
 .report-icon { opacity: 0.7; }
+
+/* Dashboard */
+.dashboard-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.dashboard-icon-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-card-alt);
+  transition: transform 0.15s;
+}
+.dashboard-icon-link:hover { transform: scale(1.1); }
+.dashboard-icon-link img { width: 28px; height: 28px; object-fit: contain; }
+.dashboard-comp-link {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-card-alt);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.dashboard-comp-link:hover { background: var(--border); }

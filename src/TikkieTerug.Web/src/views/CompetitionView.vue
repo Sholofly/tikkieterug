@@ -1,7 +1,12 @@
 <template>
   <div class="content">
     <div class="page-header">
-      <h1>{{ competitionName }}</h1>
+      <h1 style="flex: 1;">{{ competitionName }}</h1>
+      <button
+        class="btn-favorite"
+        :class="isFavorite ? 'active' : ''"
+        @click="toggleFavorite"
+      >{{ isFavorite ? '★ Favoriet' : '☆ Favoriet' }}</button>
     </div>
 
     <div class="tabs">
@@ -25,6 +30,11 @@
         :class="{ active: activeTab === 'periodes' }"
         @click="switchTab('periodes')"
       >Periodes</button>
+      <button
+        class="tab"
+        :class="{ active: activeTab === 'topscorers' }"
+        @click="switchTab('topscorers')"
+      >Topscorers</button>
     </div>
 
     <!-- Stand Tab -->
@@ -167,9 +177,11 @@
       <div v-if="loadingPeriodes" class="loading">Laden...</div>
       <div v-else-if="periodes.length === 0" class="text-muted">Geen periodes beschikbaar.</div>
       <div v-else>
-        <div v-for="periode in periodes" :key="periode.period" class="card">
-          <h3>Periode {{ periode.period }}</h3>
-          <div class="standings-row header">
+        <div v-for="periode in periodesReversed" :key="periode.period" class="card">
+          <h3>Periode {{ periode.period }}
+            <span v-if="periode.period === maxPeriod" class="badge badge-live" style="margin-left: 6px; animation: none;">Lopend</span>
+          </h3>
+          <div class="standings-row periodes header">
             <span class="standings-pos">#</span>
             <span></span>
             <span class="standings-name">Club</span>
@@ -182,7 +194,7 @@
           <div
             v-for="row in periode.standings"
             :key="row.clubId"
-            class="standings-row"
+            class="standings-row periodes"
             style="cursor: pointer;"
             @click="router.push(`/club/${row.clubId}`)"
           >
@@ -201,13 +213,43 @@
         </div>
       </div>
     </div>
+
+    <!-- Topscorers Tab -->
+    <div v-if="activeTab === 'topscorers'">
+      <div v-if="loadingTopscorers" class="loading">Laden...</div>
+      <div v-else-if="topscorers.length === 0" class="text-muted">Geen topscorers beschikbaar.</div>
+      <div v-else class="card">
+        <div class="topscorer-row header">
+          <span></span>
+          <span class="topscorer-name">Speler</span>
+          <span class="topscorer-num">Goals</span>
+        </div>
+        <div
+          v-for="player in topscorers"
+          :key="player.playerId"
+          class="topscorer-row"
+          style="cursor: pointer;"
+          @click="router.push(`/club/${player.clubId}`)"
+        >
+          <span class="topscorer-name">
+            <span>{{ player.name }}</span>
+            <span class="text-xs text-muted flex items-center gap-2">
+              <img :src="player.logo" class="club-logo-sm" :alt="player.club" />
+              {{ player.club }}
+            </span>
+          </span>
+          <span class="topscorer-num font-bold">{{ player.goals }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useFavoritesStore } from '../stores/favorites.js'
 
 const props = defineProps({
   id: {
@@ -218,10 +260,21 @@ const props = defineProps({
 
 const router = useRouter()
 const api = useApi()
+const favoritesStore = useFavoritesStore()
 
 const competitionId = parseInt(props.id, 10)
 
 const competitionName = ref('Competitie')
+
+const isFavorite = computed(() => favoritesStore.isCompetitionFavorite(competitionId))
+
+function toggleFavorite() {
+  if (isFavorite.value) {
+    favoritesStore.removeCompetition(competitionId)
+  } else {
+    favoritesStore.addCompetition({ id: competitionId, name: competitionName.value })
+  }
+}
 
 const activeTab = ref('stand')
 const detailedStand = ref(false)
@@ -230,11 +283,16 @@ const standings = ref([])
 const results = ref([])
 const fixtures = ref([])
 const periodes = ref([])
+const topscorers = ref([])
 
 const loadingStandings = ref(false)
 const loadingResults = ref(false)
 const loadingFixtures = ref(false)
 const loadingPeriodes = ref(false)
+const loadingTopscorers = ref(false)
+
+const periodesReversed = computed(() => [...periodes.value].reverse())
+const maxPeriod = computed(() => periodes.value.length > 0 ? Math.max(...periodes.value.map(p => p.period)) : 0)
 
 async function loadStandings() {
   if (standings.value.length > 0) return
@@ -276,11 +334,22 @@ async function loadPeriodes() {
   }
 }
 
+async function loadTopscorers() {
+  if (topscorers.value.length > 0) return
+  loadingTopscorers.value = true
+  try {
+    topscorers.value = await api.getCompetitionTopscorers(competitionId)
+  } finally {
+    loadingTopscorers.value = false
+  }
+}
+
 function loadActiveTab(tab) {
   if (tab === 'stand') loadStandings()
   else if (tab === 'uitslagen') loadResults()
   else if (tab === 'programma') loadFixtures()
   else if (tab === 'periodes') loadPeriodes()
+  else if (tab === 'topscorers') loadTopscorers()
 }
 
 function switchTab(tab) {

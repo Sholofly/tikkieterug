@@ -43,5 +43,8 @@ export function useApi() {
 
     getFixtures: (competitionId) =>
       fetchJson(`/competitions/${competitionId}/programma`),
+
+    getCompetitionTopscorers: (competitionId) =>
+      fetchJson(`/competitions/${competitionId}/topscorers`),
   }
 }
