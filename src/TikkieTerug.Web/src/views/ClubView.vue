@@ -25,7 +25,7 @@
             :class="isFavorite ? 'active' : ''"
             style="margin-left: auto;"
             @click="toggleFavorite"
-          >{{ isFavorite ? '★ Favoriet' : '☆ Favoriet' }}</button>
+          >{{ isFavorite ? '❤️ Volgt' : '🤍 Volgen' }}</button>
         </div>
       </div>
 
@@ -45,20 +45,24 @@
           <div
             v-for="match in allProgramma"
             :key="match.matchId"
-            class="fixture-row"
+            class="fixture-row-wrap"
             @click="router.push(`/match/${match.matchId}`)"
           >
-            <div class="fixture-home">
-              <span>{{ match.homeClub }}</span>
-              <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-            </div>
-            <div class="fixture-center" style="min-width: 70px;">
-              <span class="text-xs text-muted">{{ formatDateShort(match.date) }}</span>
-              <span class="fixture-time" style="font-size: 0.8rem;">{{ match.time }}</span>
-            </div>
-            <div class="fixture-away">
-              <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-              <span>{{ match.awayClub }}</span>
+            <div class="text-xs text-muted" style="text-align: center; padding-top: 4px;">{{ formatDateShort(match.date) }}</div>
+            <div class="fixture-row" style="cursor: pointer;">
+              <div class="fixture-home">
+                <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
+                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              </div>
+              <div class="fixture-center">
+                <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                <span v-if="match.status && match.date === today" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended', 'badge-scheduled': match.status === 'scheduled' }">{{ statusLabel(match.status) }}</span>
+              </div>
+              <div class="fixture-away">
+                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -71,26 +75,24 @@
           <div
             v-for="match in allUitslagen"
             :key="match.matchId"
-            class="fixture-row"
+            class="fixture-row-wrap"
             @click="router.push(`/match/${match.matchId}`)"
           >
-            <div class="fixture-home">
-              <span>{{ match.homeClub }}</span>
-              <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-            </div>
-            <div class="fixture-center" style="min-width: 70px;">
-              <span class="text-xs text-muted">{{ formatDateShort(match.date) }}</span>
-              <span v-if="match.status !== 'scheduled'" class="fixture-score">{{ match.homeScore }} – {{ match.awayScore }}</span>
-              <span v-else class="fixture-score text-muted">{{ match.time }}</span>
-            </div>
-            <div class="fixture-away">
-              <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-              <span>{{ match.awayClub }}</span>
-            </div>
-            <!-- Report indicators -->
-            <div v-if="match.homeReport || match.awayReport" class="report-indicators">
-              <span v-if="match.homeReport" class="report-icon" title="Thuisverslag">📝</span>
-              <span v-if="match.awayReport" class="report-icon" title="Uitverslag">📝</span>
+            <div class="text-xs text-muted" style="text-align: center; padding-top: 4px;">{{ formatDateShort(match.date) }}</div>
+            <div class="fixture-row" style="cursor: pointer;">
+              <div class="fixture-home">
+                <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
+                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+              </div>
+              <div class="fixture-center">
+                <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                <span v-if="match.status !== 'scheduled' && match.date === today" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended' }">{{ statusLabel(match.status) }}</span>
+              </div>
+              <div class="fixture-away">
+                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -99,27 +101,35 @@
       <!-- Stand -->
       <div v-if="activeTab === 'stand'">
         <div v-if="data.stand.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen stand beschikbaar.</div>
-        <div v-else class="card">
-          <div class="standings-row header compact-team">
-            <span class="standings-pos">#</span>
-            <span></span>
-            <span class="standings-name">Club</span>
-            <span class="standings-num">W</span>
-            <span class="standings-pts">Pts</span>
+        <div v-else>
+          <div class="card">
+            <div class="standings-row header compact-team">
+              <span class="standings-pos">#</span>
+              <span></span>
+              <span class="standings-name">Club</span>
+              <span class="standings-num">W</span>
+              <span class="standings-pts">Pts</span>
+            </div>
+            <div
+              v-for="row in data.stand"
+              :key="row.clubId"
+              class="standings-row compact-team"
+              :class="{ 'highlight-row': row.clubId === (data.club.id ?? parseInt(id)) }"
+              style="cursor: pointer;"
+              @click="router.push(`/club/${row.clubId}`)"
+            >
+              <span class="standings-pos">{{ row.position }}</span>
+              <span><img :src="row.logo" class="club-logo-sm" :alt="row.club" /></span>
+              <span class="standings-name">{{ row.club }}<span v-if="row.penaltyPoints > 0" class="penalty-marker">*</span></span>
+              <span class="standings-num">{{ row.played }}</span>
+              <span class="standings-pts">{{ row.points }}</span>
+            </div>
           </div>
-          <div
-            v-for="row in data.stand"
-            :key="row.clubId"
-            class="standings-row compact-team"
-            :class="{ 'highlight-row': row.clubId === (data.club.id ?? parseInt(id)) }"
-            style="cursor: pointer;"
-            @click="router.push(`/club/${row.clubId}`)"
-          >
-            <span class="standings-pos">{{ row.position }}</span>
-            <span><img :src="row.logo" class="club-logo-sm" :alt="row.club" /></span>
-            <span class="standings-name">{{ row.club }}</span>
-            <span class="standings-num">{{ row.played }}</span>
-            <span class="standings-pts">{{ row.points }}</span>
+          <div v-if="data.stand.some(r => r.penaltyPoints > 0)" class="penalty-note">
+            * Punten in mindering:
+            <span v-for="row in data.stand.filter(r => r.penaltyPoints > 0)" :key="row.clubId" class="penalty-item">
+              {{ row.club }} (−{{ row.penaltyPoints }})
+            </span>
           </div>
         </div>
       </div>
@@ -219,6 +229,7 @@ const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'p
 const clubInfo = ref(null)
 const infoLoading = ref(false)
 const infoLoaded = ref(false)
+const today = new Date().toISOString().slice(0, 10)
 
 // Sync tab to URL and lazy-load info
 watch(activeTab, async (tab) => {

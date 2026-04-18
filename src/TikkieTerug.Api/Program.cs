@@ -836,6 +836,14 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
             var awayId = int.Parse(f[1]);
             var dayOffset = int.Parse(f[5]);
             var matchDate = today.AddDays(dayOffset);
+            var gespeeld = int.Parse(f[4]);
+            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+            var status = statusCode switch
+            {
+                0 => "scheduled", 1 => "live", 2 => "halftime",
+                3 => "ended", 4 => "suspended", 5 => "cancelled",
+                _ => "unknown"
+            };
             return new
             {
                 date = matchDate.ToString("yyyy-MM-dd"),
@@ -845,8 +853,11 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
                 awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                homeScore = int.Parse(f[2]),
+                awayScore = int.Parse(f[3]),
+                status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
-                matchId = int.Parse(f[17])
+                matchId = long.Parse(f[17])
             };
         })
         .GroupBy(m => m.date)
@@ -862,6 +873,9 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 m.awayClubId,
                 m.awayClub,
                 m.awayLogo,
+                m.homeScore,
+                m.awayScore,
+                m.status,
                 m.time,
                 m.matchId
             })
@@ -991,9 +1005,13 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
     var topscorersTask = client.PostAsync(
         "https://voetbaloost.nl/SVC_Teams.asmx/topscorerat",
         new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
-    var standTask = client.PostAsync(
-        "https://voetbaloost.nl/SVC_Ranglijst.asmx/rang_team",
-        new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
+    var standTask = club.CompetitionId.HasValue
+        ? client.PostAsync(
+            "https://voetbaloost.nl/SVC_Ranglijst.asmx/ranglijst_klasse",
+            new StringContent($"{{\"k\":\"{club.CompetitionId.Value}\"}}", Encoding.UTF8, "application/json"))
+        : client.PostAsync(
+            "https://voetbaloost.nl/SVC_Ranglijst.asmx/rang_team",
+            new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var fotoTask = client.PostAsync(
         "https://voetbaloost.nl/SVC_Teams.asmx/selFoto",
         new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
@@ -1104,6 +1122,14 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
             var f = r.Split(';');
             var homeId = int.Parse(f[0]);
             var awayId = int.Parse(f[1]);
+            var gespeeld = int.Parse(f[4]);
+            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+            var status = statusCode switch
+            {
+                0 => "scheduled", 1 => "live", 2 => "halftime",
+                3 => "ended", 4 => "suspended", 5 => "cancelled",
+                _ => "unknown"
+            };
             return new
             {
                 date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
@@ -1113,8 +1139,11 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
                 awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                homeScore = int.Parse(f[2]),
+                awayScore = int.Parse(f[3]),
+                status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
-                matchId = int.Parse(f[17])
+                matchId = long.Parse(f[17])
             };
         })
         .GroupBy(m => m.date)
@@ -1149,7 +1178,7 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
     }
     catch { }
 
-    // Parse standings: @-separated: [0]=pos [1]=club [2]=played [3]=points [4]=? [5]=clubId [6]=teamNr [7]=season [8]=speeldag
+    // Parse standings
     var stand = new List<object>();
     try
     {
@@ -1157,24 +1186,53 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
         var standData = JsonDocument.Parse(standJson).RootElement.GetProperty("d").GetString();
         if (!string.IsNullOrEmpty(standData))
         {
-            stand = standData.Split('#', StringSplitOptions.RemoveEmptyEntries)
-                .Select(r =>
-                {
-                    var f = r.Split('@');
-                    var cId = int.Parse(f[5]);
-                    return new
+            if (club.CompetitionId.HasValue)
+            {
+                // ranglijst_klasse format: @-separated with full data
+                stand = standData.Split('#', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(r =>
                     {
-                        position = int.Parse(f[0]),
-                        club = f[1],
-                        clubId = cId,
-                        logo = $"https://voetbalnederland.nl/l/{cId}.gif",
-                        played = int.Parse(f[2]),
-                        points = int.Parse(f[3])
-                    };
-                })
-                .OrderBy(s => s.position)
-                .Cast<object>()
-                .ToList();
+                        var f = r.Split('@');
+                        var cId = int.Parse(f[17]);
+                        var penaltyPoints = int.TryParse(f[11], out var pp) ? pp : 0;
+                        return new
+                        {
+                            position = int.Parse(f[0]),
+                            club = f[2],
+                            clubId = cId,
+                            logo = $"https://voetbalnederland.nl/l/{cId}.gif",
+                            played = int.Parse(f[4]),
+                            points = int.Parse(f[8]),
+                            penaltyPoints
+                        };
+                    })
+                    .OrderBy(s => s.position)
+                    .Cast<object>()
+                    .ToList();
+            }
+            else
+            {
+                // rang_team format: @-separated with minimal data
+                stand = standData.Split('#', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(r =>
+                    {
+                        var f = r.Split('@');
+                        var cId = int.Parse(f[5]);
+                        return new
+                        {
+                            position = int.Parse(f[0]),
+                            club = f[1],
+                            clubId = cId,
+                            logo = $"https://voetbalnederland.nl/l/{cId}.gif",
+                            played = int.Parse(f[2]),
+                            points = int.Parse(f[3]),
+                            penaltyPoints = 0
+                        };
+                    })
+                    .OrderBy(s => s.position)
+                    .Cast<object>()
+                    .ToList();
+            }
         }
     }
     catch { }

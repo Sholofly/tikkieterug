@@ -6,7 +6,7 @@
         class="btn-favorite"
         :class="isFavorite ? 'active' : ''"
         @click="toggleFavorite"
-      >{{ isFavorite ? '★ Favoriet' : '☆ Favoriet' }}</button>
+      >{{ isFavorite ? '❤️ Volgt' : '🤍 Volgen' }}</button>
     </div>
 
     <select class="tab-select" v-model="activeTab">
@@ -87,38 +87,38 @@
       <div v-if="loadingResults" class="loading">Laden...</div>
       <div v-else-if="results.length === 0" class="text-muted">Geen uitslagen beschikbaar.</div>
       <div v-else>
-        <div v-for="group in results" :key="group.date" class="date-group">
-          <div class="text-sm text-muted">{{ new Date(group.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) }}</div>
-           <div class="card">
+        <div v-for="group in results" :key="group.date" class="card" style="margin-bottom: 8px;">
+          <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
             <div
               v-for="match in group.matches"
               :key="match.matchId"
-              class="fixture-row"
+              class="fixture-row-wrap"
               @click="router.push(`/match/${match.matchId}`)"
             >
+              <div class="fixture-row" style="cursor: pointer;">
                <div class="fixture-home">
-                 <span>{{ match.homeClub }}</span>
+                 <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
                  <img v-if="match.homeLogo" :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
                </div>
                <div class="fixture-center">
-                 <span v-if="match.status !== 'scheduled'" class="fixture-score">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                 <span v-else class="fixture-score text-muted">{{ match.time }}</span>
+                 <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                 <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
                  <span
+                   v-if="match.status !== 'scheduled' && group.date === today"
                    class="badge"
                    :class="{
                      'badge-live': match.status === 'live',
                      'badge-halftime': match.status === 'halftime',
                      'badge-ended': match.status === 'ended',
-                     'badge-scheduled': match.status === 'scheduled',
                    }"
-                 >{{ { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[match.status] || match.status }}</span>
+                 >{{ statusLabel(match.status) }}</span>
                </div>
                <div class="fixture-away">
                  <img v-if="match.awayLogo" :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                 <span>{{ match.awayClub }}</span>
+                 <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
                </div>
+              </div>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -128,26 +128,30 @@
       <div v-if="loadingFixtures" class="loading">Laden...</div>
       <div v-else-if="fixtures.length === 0" class="text-muted">Geen aankomende wedstrijden.</div>
       <div v-else>
-        <div v-for="group in fixtures" :key="group.date" class="date-group">
-          <div class="text-sm text-muted">{{ new Date(group.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) }}</div>
-           <div class="card">
+        <div v-for="group in fixtures" :key="group.date" class="card" style="margin-bottom: 8px;">
+          <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
             <div
               v-for="match in group.matches"
               :key="match.matchId"
-              class="fixture-row"
+              class="fixture-row-wrap"
               @click="router.push(`/match/${match.matchId}`)"
             >
+              <div class="fixture-row" style="cursor: pointer;">
                <div class="fixture-home">
                  <span>{{ match.homeClub }}</span>
                  <img v-if="match.homeLogo" :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
                </div>
-               <div class="fixture-time">{{ match.time }}</div>
+               <div class="fixture-center">
+                 <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                 <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                 <span v-if="match.status && group.date === today" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended', 'badge-scheduled': match.status === 'scheduled' }">{{ statusLabel(match.status) }}</span>
+               </div>
                <div class="fixture-away">
                  <img v-if="match.awayLogo" :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
                  <span>{{ match.awayClub }}</span>
                </div>
+              </div>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -278,8 +282,21 @@ const loadingFixtures = ref(false)
 const loadingPeriodes = ref(false)
 const loadingTopscorers = ref(false)
 
+const today = new Date().toISOString().slice(0, 10)
+
 const periodesReversed = computed(() => [...periodes.value].reverse())
 const maxPeriod = computed(() => periodes.value.length > 0 ? Math.max(...periodes.value.map(p => p.period)) : 0)
+
+function statusLabel(status) {
+  return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status
+}
+
+function formatDateShort(dateStr) {
+  const today = new Date().toISOString().slice(0, 10)
+  if (dateStr === today) return 'Vandaag'
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+}
 
 async function loadStandings() {
   if (standings.value.length > 0) return

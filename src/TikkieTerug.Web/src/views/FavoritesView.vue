@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-header">
-      <h1>Favorieten</h1>
+      <h1>Volgt</h1>
     </div>
 
     <div class="search-box">
@@ -65,7 +65,7 @@
       <section class="mt-4">
         <h2 class="font-bold mb-2">Mijn clubs</h2>
         <div v-if="favoritesStore.clubs.length === 0" class="empty text-muted text-sm">
-          Nog geen favoriete clubs toegevoegd.
+          Nog geen clubs die je volgt.
         </div>
         <div
           v-for="club in favoritesStore.clubs"
@@ -101,7 +101,7 @@
       <section class="mt-4">
         <h2 class="font-bold mb-2">Mijn competities</h2>
         <div v-if="favoritesStore.competitions.length === 0" class="empty text-muted text-sm">
-          Nog geen favoriete competities toegevoegd.
+          Nog geen competities die je volgt.
         </div>
         <div
           v-for="competition in favoritesStore.competitions"

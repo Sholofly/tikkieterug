@@ -41,7 +41,7 @@
                 <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
               </div>
             </div>
-            <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
+            <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
           </div>
         </div>
       </div>
@@ -76,7 +76,7 @@
                   <span>{{ match.awayClub }}</span>
                 </div>
               </div>
-              <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
+              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
             </div>
           </div>
         </template>
@@ -112,7 +112,7 @@
                   <span>{{ match.awayClub }}</span>
                 </div>
               </div>
-              <div v-if="match._compName" class="fixture-comp-name" @click.stop="router.push(`/competition/${match._compId}`)">{{ match._compName }}</div>
+              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
             </div>
           </div>
         </template>
@@ -216,13 +216,15 @@ async function fetchDashboardData() {
     // 1. Per favorite club: team_programma1 (has live status) + team uitslagen (for ended today)
     // 2. Per favorite competition: programma + uitslagen (for matches not involving fav clubs)
     // 3. Competition names
+    const favCompIds = favComps.map(c => c.id)
     const [clubProgrammaResults, compUitslResults, compProgrammaResults, nameResults] = await Promise.all([
       Promise.all(favClubs.map(club =>
         api.getClubProgramma(club.id)
           .then(data => ({ clubId: club.id, compId: club.competitionId, data }))
           .catch(() => ({ clubId: club.id, compId: club.competitionId, data: [] }))
       )),
-      Promise.all(compIdArr.map(id => api.getResults(id).catch(() => []))),
+      // Only fetch uitslagen for explicitly favorited competitions (club matches come from team_programma1)
+      Promise.all(favCompIds.map(id => api.getResults(id).catch(() => []))),
       Promise.all(favComps.map(comp =>
         api.getFixtures(comp.id).then(data => ({ compId: comp.id, data })).catch(() => ({ compId: comp.id, data: [] }))
       )),
@@ -260,7 +262,7 @@ async function fetchDashboardData() {
       }
     }
 
-    // 2. Process competition uitslagen (for today's ended matches not already seen)
+    // 2. Process competition uitslagen (only for explicitly favorited competitions)
     for (let i = 0; i < compUitslResults.length; i++) {
       const grouped = compUitslResults[i]
       if (!Array.isArray(grouped)) continue
@@ -269,8 +271,8 @@ async function fetchDashboardData() {
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
-          match._compId = compIdArr[i]
-          match._compName = compNames[compIdArr[i]] || null
+          match._compId = favCompIds[i]
+          match._compName = compNames[favCompIds[i]] || null
           match._date = group.date
           todayList.push(match)
         }

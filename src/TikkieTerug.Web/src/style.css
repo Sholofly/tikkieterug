@@ -691,15 +691,15 @@ a { color: var(--accent); text-decoration: none; }
 .fixture-row-wrap {
   cursor: pointer;
 }
+.fixture-row-wrap + .fixture-row-wrap {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
 .fixture-comp-name {
   text-align: center;
   font-size: 0.7rem;
   color: var(--text-muted);
   padding: 0 0 6px;
-  cursor: pointer;
-}
-.fixture-comp-name:hover {
-  color: var(--accent);
 }
 
 /* Club info tab */
