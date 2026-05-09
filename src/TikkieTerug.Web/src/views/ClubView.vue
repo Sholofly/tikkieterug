@@ -102,28 +102,55 @@
       <div v-if="activeTab === 'stand'">
         <div v-if="data.stand.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen stand beschikbaar.</div>
         <div v-else>
-          <div class="card">
-            <div class="standings-row header compact-team">
+          <div class="flex items-center" style="justify-content: flex-end; padding: 0 0 6px;">
+            <button class="toggle-detail" @click="detailedStand = !detailedStand">
+              {{ detailedStand ? 'Compact' : 'Details' }}
+            </button>
+          </div>
+          <div :class="{ 'standings-scroll-wrap': detailedStand }">
+          <div class="card" :class="{ 'standings-scroll': detailedStand }">
+            <div class="standings-row" :class="detailedStand ? 'header detailed' : 'header compact'">
               <span class="standings-pos">#</span>
               <span></span>
               <span class="standings-name">Club</span>
               <span class="standings-num">W</span>
+              <template v-if="detailedStand">
+                <span class="standings-num">W</span>
+                <span class="standings-num">G</span>
+                <span class="standings-num">V</span>
+                <span class="standings-num">+</span>
+                <span class="standings-num">−</span>
+              </template>
+              <span class="standings-num">+/−</span>
               <span class="standings-pts">Pts</span>
             </div>
             <div
               v-for="row in data.stand"
               :key="row.clubId"
-              class="standings-row compact-team"
-              :class="{ 'highlight-row': row.clubId === (data.club.id ?? parseInt(id)) }"
+              class="standings-row"
+              :class="[detailedStand ? 'detailed' : 'compact', { 'highlight-row': row.clubId === (data.club.id ?? parseInt(id)) }]"
               style="cursor: pointer;"
               @click="router.push(`/club/${row.clubId}`)"
             >
               <span class="standings-pos">{{ row.position }}</span>
               <span><img :src="row.logo" class="club-logo-sm" :alt="row.club" /></span>
-              <span class="standings-name">{{ row.club }}<span v-if="row.penaltyPoints > 0" class="penalty-marker">*</span></span>
+              <span class="standings-name flex items-center gap-2">
+                {{ row.club }}
+                <span v-if="row.periodWon > 0" class="period-badge">P{{ row.periodWon }}</span>
+                <span v-if="row.penaltyPoints > 0" class="penalty-marker">*</span>
+              </span>
               <span class="standings-num">{{ row.played }}</span>
+              <template v-if="detailedStand">
+                <span class="standings-num">{{ row.won }}</span>
+                <span class="standings-num">{{ row.drawn }}</span>
+                <span class="standings-num">{{ row.lost }}</span>
+                <span class="standings-num">{{ row.goalsFor }}</span>
+                <span class="standings-num">{{ row.goalsAgainst }}</span>
+              </template>
+              <span class="standings-num">{{ row.goalDifference > 0 ? '+' : '' }}{{ row.goalDifference }}</span>
               <span class="standings-pts">{{ row.points }}</span>
             </div>
+          </div>
           </div>
           <div v-if="data.stand.some(r => r.penaltyPoints > 0)" class="penalty-note">
             * Punten in mindering:
@@ -229,6 +256,7 @@ const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'p
 const clubInfo = ref(null)
 const infoLoading = ref(false)
 const infoLoaded = ref(false)
+const detailedStand = ref(false)
 const today = new Date().toISOString().slice(0, 10)
 
 // Sync tab to URL and lazy-load info

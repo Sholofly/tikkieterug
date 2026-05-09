@@ -1335,6 +1335,9 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                         var f = r.Split('@');
                         var cId = int.Parse(f[17]);
                         var penaltyPoints = int.TryParse(f[11], out var pp) ? pp : 0;
+                        var periodWon = int.TryParse(f[12], out var pw) ? pw : 0;
+                        var goalsFor = int.Parse(f[9]);
+                        var goalsAgainst = int.Parse(f[10]);
                         return new
                         {
                             position = int.Parse(f[0]),
@@ -1342,8 +1345,15 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                             clubId = cId,
                             logo = $"https://voetbalnederland.nl/l/{cId}.gif",
                             played = int.Parse(f[4]),
+                            won = int.Parse(f[5]),
+                            drawn = int.Parse(f[6]),
+                            lost = int.Parse(f[7]),
+                            goalsFor,
+                            goalsAgainst,
+                            goalDifference = goalsFor - goalsAgainst,
                             points = int.Parse(f[8]),
-                            penaltyPoints
+                            penaltyPoints,
+                            periodWon
                         };
                     })
                     .OrderBy(s => s.position)
@@ -1365,8 +1375,15 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                             clubId = cId,
                             logo = $"https://voetbalnederland.nl/l/{cId}.gif",
                             played = int.Parse(f[2]),
+                            won = 0,
+                            drawn = 0,
+                            lost = 0,
+                            goalsFor = 0,
+                            goalsAgainst = 0,
+                            goalDifference = 0,
                             points = int.Parse(f[3]),
-                            penaltyPoints = 0
+                            penaltyPoints = 0,
+                            periodWon = 0
                         };
                     })
                     .OrderBy(s => s.position)

@@ -406,6 +406,22 @@ a { color: var(--accent); text-decoration: none; }
 .standings-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+.standings-scroll-wrap {
+  position: relative;
+}
+.standings-scroll-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--bg-card));
+  border-radius: 0 var(--radius) var(--radius) 0;
+  z-index: 1;
 }
 .standings-row {
   display: grid;

@@ -27,6 +27,7 @@
             {{ detailedStand ? 'Compact' : 'Details' }}
           </button>
         </div>
+        <div :class="{ 'standings-scroll-wrap': detailedStand }">
         <div class="card" :class="{ 'standings-scroll': detailedStand }">
           <div class="standings-row" :class="detailedStand ? 'header detailed' : 'header compact'">
             <span class="standings-pos">#</span>
@@ -72,6 +73,7 @@
             <span class="standings-num">{{ row.goalDifference > 0 ? '+' : '' }}{{ row.goalDifference }}</span>
             <span class="standings-pts">{{ row.points }}</span>
           </div>
+        </div>
         </div>
         <div v-if="standings.some(r => r.penaltyPoints > 0)" class="penalty-note">
           * Punten in mindering:
