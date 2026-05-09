@@ -20,27 +20,26 @@
     <div v-if="loading" class="loading">Laden...</div>
 
     <template v-else-if="selectedAfdeling">
-      <div v-for="group in groupedCompetitions" :key="group.label || 'all'" style="margin-top: 16px;">
+      <div v-for="group in groupedCompetitions" :key="group.label || 'all'" style="margin-top: 10px;">
         <div
           v-if="group.label"
           class="text-xs text-muted font-bold"
-          style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;"
+          style="margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;"
         >
           {{ group.label }}
         </div>
-        <div class="card">
+        <div class="comp-grid">
           <div
             v-for="comp in group.competitions"
             :key="comp.id"
-            class="comp-row flex items-center justify-between gap-2"
+            class="comp-cell"
             @click="router.push(`/competition/${comp.id}`)"
           >
-            <span class="font-bold">{{ comp.name }}</span>
+            <span class="comp-name">{{ comp.name }}</span>
             <button
               class="fav-btn"
               :class="{ 'fav-active': favoritesStore.isCompetitionFavorite(comp.id) }"
               @click.stop="toggleFavorite(comp)"
-              :title="favoritesStore.isCompetitionFavorite(comp.id) ? 'Verwijder uit favorieten' : 'Voeg toe aan favorieten'"
             >
               {{ favoritesStore.isCompetitionFavorite(comp.id) ? '★' : '☆' }}
             </button>
@@ -69,7 +68,8 @@ const favoritesStore = useFavoritesStore()
 
 const loading = ref(false)
 const afdelingen = ref([])
-const selectedAfdelingId = ref(3) // Default to "Oost"
+const storedAfdeling = localStorage.getItem('competities-afdeling')
+const selectedAfdelingId = ref(storedAfdeling ? parseInt(storedAfdeling, 10) : null)
 
 const selectedAfdeling = computed(() =>
   afdelingen.value.find(a => a.afdelingId === selectedAfdelingId.value) ?? null
@@ -103,6 +103,7 @@ const groupedCompetitions = computed(() => {
 
 function selectAfdeling(afd) {
   selectedAfdelingId.value = afd.afdelingId
+  localStorage.setItem('competities-afdeling', afd.afdelingId)
 }
 
 function toggleFavorite(comp) {
@@ -117,8 +118,7 @@ onMounted(async () => {
   loading.value = true
   try {
     afdelingen.value = await api.getCompetitions()
-    // If "Oost" (id 3) is not present, fall back to first afdeling
-    if (afdelingen.value.length > 0 && !afdelingen.value.find(a => a.afdelingId === 3)) {
+    if (afdelingen.value.length > 0 && !afdelingen.value.find(a => a.afdelingId === selectedAfdelingId.value)) {
       selectedAfdelingId.value = afdelingen.value[0].afdelingId
     }
   } finally {
@@ -162,24 +162,40 @@ onMounted(async () => {
   border-color: var(--accent);
 }
 
-.comp-row {
-  cursor: pointer;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+.comp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
-.comp-row:last-child {
-  border-bottom: none;
+.comp-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.comp-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .fav-btn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
-  padding: 2px 6px;
-  border-radius: var(--radius, 6px);
+  padding: 0 2px;
   transition: color 0.15s;
   flex-shrink: 0;
   line-height: 1;
