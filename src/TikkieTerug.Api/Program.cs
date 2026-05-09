@@ -1222,73 +1222,85 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
     var uitslagen = uitslagenRows
         .Select(r =>
         {
-            var f = r.Split(';');
-            var homeId = int.Parse(f[0]);
-            var awayId = int.Parse(f[1]);
-            var gespeeld = int.Parse(f[4]);
-            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
-            var status = statusCode switch
+            try
             {
-                0 => "scheduled", 1 => "live", 2 => "halftime",
-                3 => "ended", 4 => "suspended", 5 => "cancelled",
-                _ => "unknown"
-            };
-            return new
-            {
-                date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
-                homeClubId = homeId,
-                homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
-                awayClubId = awayId,
-                awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
-                homeScore = int.Parse(f[2]),
-                awayScore = int.Parse(f[3]),
-                status,
-                homeReport = f[11] == "1",
-                awayReport = f[12] == "1",
-                time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
-                matchId = long.Parse(f[17])
-            };
+                var f = r.Split(';');
+                if (f.Length < 18 || !int.TryParse(f[0], out var homeId) || !int.TryParse(f[1], out var awayId))
+                    return null;
+                var gespeeld = int.Parse(f[4]);
+                var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+                var status = statusCode switch
+                {
+                    0 => "scheduled", 1 => "live", 2 => "halftime",
+                    3 => "ended", 4 => "suspended", 5 => "cancelled",
+                    _ => "unknown"
+                };
+                return new
+                {
+                    date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
+                    homeClubId = homeId,
+                    homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
+                    homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                    awayClubId = awayId,
+                    awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
+                    awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                    homeScore = int.Parse(f[2]),
+                    awayScore = int.Parse(f[3]),
+                    status,
+                    homeReport = f[11] == "1",
+                    awayReport = f[12] == "1",
+                    time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                    matchId = long.Parse(f[17])
+                };
+            }
+            catch { return null; }
         })
-        .GroupBy(m => m.date)
+        .Where(m => m != null)
+        .GroupBy(m => m!.date)
         .OrderByDescending(g => g.Key)
-        .Select(g => new { date = g.Key, matches = g.ToList() });
+        .Select(g => new { date = g.Key, matches = g.ToList() })
+        .ToList();
 
     // Build programma grouped by date, ascending
     var programma = programmaRows
         .Select(r =>
         {
-            var f = r.Split(';');
-            var homeId = int.Parse(f[0]);
-            var awayId = int.Parse(f[1]);
-            var gespeeld = int.Parse(f[4]);
-            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
-            var status = statusCode switch
+            try
             {
-                0 => "scheduled", 1 => "live", 2 => "halftime",
-                3 => "ended", 4 => "suspended", 5 => "cancelled",
-                _ => "unknown"
-            };
-            return new
-            {
-                date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
-                homeClubId = homeId,
-                homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
-                awayClubId = awayId,
-                awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
-                homeScore = int.Parse(f[2]),
-                awayScore = int.Parse(f[3]),
-                status,
-                time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
-                matchId = long.Parse(f[17])
-            };
+                var f = r.Split(';');
+                if (f.Length < 18 || !int.TryParse(f[0], out var homeId) || !int.TryParse(f[1], out var awayId))
+                    return null;
+                var gespeeld = int.Parse(f[4]);
+                var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+                var status = statusCode switch
+                {
+                    0 => "scheduled", 1 => "live", 2 => "halftime",
+                    3 => "ended", 4 => "suspended", 5 => "cancelled",
+                    _ => "unknown"
+                };
+                return new
+                {
+                    date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
+                    homeClubId = homeId,
+                    homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
+                    homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                    awayClubId = awayId,
+                    awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
+                    awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                    homeScore = int.Parse(f[2]),
+                    awayScore = int.Parse(f[3]),
+                    status,
+                    time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                    matchId = long.Parse(f[17])
+                };
+            }
+            catch { return null; }
         })
-        .GroupBy(m => m.date)
+        .Where(m => m != null)
+        .GroupBy(m => m!.date)
         .OrderBy(g => g.Key)
-        .Select(g => new { date = g.Key, matches = g.ToList() });
+        .Select(g => new { date = g.Key, matches = g.ToList() })
+        .ToList();
 
     // Parse topscorers: [0]=name [1]=? [2]=goalsThisSeason [3]=totalGoals [4]=playerId [5]=?
     var topscorers = new List<object>();
