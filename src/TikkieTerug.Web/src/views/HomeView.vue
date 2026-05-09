@@ -4,57 +4,53 @@
   </div>
 
   <div class="content">
-      <!-- Today's matches -->
-      <div style="margin-top: 16px;">
-        <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">Vandaag</div>
-        <div v-if="loading" class="loading">Laden...</div>
-        <div v-else-if="todayMatches.length === 0" class="card text-muted text-sm" style="text-align: center;">
-          Geen wedstrijden vandaag.
-        </div>
-        <div v-else class="card">
-          <div
-            v-for="match in todayMatches"
-            :key="match.matchId"
-            class="fixture-row-wrap"
-            @click="router.push(`/match/${match.matchId}`)"
-          >
-            <div class="fixture-row" style="cursor: pointer;">
-              <div class="fixture-home">
-                <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
-                <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+      <div v-if="loading" class="loading" style="margin-top: 16px;">Laden...</div>
+
+      <template v-else>
+        <!-- Today's matches: followed clubs -->
+        <div v-if="todayClubMatches.length > 0" style="margin-top: 16px;">
+          <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">Mijn clubs — vandaag</div>
+          <div class="card">
+            <div
+              v-for="match in todayClubMatches"
+              :key="match.matchId"
+              class="fixture-row-wrap"
+              @click="router.push(`/match/${match.matchId}`)"
+            >
+              <div class="fixture-row" style="cursor: pointer;">
+                <div class="fixture-home">
+                  <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
+                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
+                </div>
+                <div class="fixture-center">
+                  <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
+                  <span
+                    v-if="match.status !== 'scheduled'"
+                    class="badge"
+                    :class="{
+                      'badge-live': match.status === 'live',
+                      'badge-halftime': match.status === 'halftime',
+                      'badge-ended': match.status === 'ended',
+                    }"
+                  >{{ statusLabel(match.status) }}</span>
+                </div>
+                <div class="fixture-away">
+                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
+                  <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
+                </div>
               </div>
-              <div class="fixture-center">
-                <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-                <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                <span
-                  v-if="match.status !== 'scheduled'"
-                  class="badge"
-                  :class="{
-                    'badge-live': match.status === 'live',
-                    'badge-halftime': match.status === 'halftime',
-                    'badge-ended': match.status === 'ended',
-                  }"
-                >{{ statusLabel(match.status) }}</span>
-              </div>
-              <div class="fixture-away">
-                <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
-              </div>
+              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
             </div>
-            <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
           </div>
         </div>
-      </div>
 
-      <!-- Upcoming club matches -->
-      <div v-if="clubUpcomingGrouped.length > 0" style="margin-top: 16px;">
-        <div class="collapsible-header" @click="toggleSection('clubUpcoming')" style="padding: 0 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-          <span class="collapse-chevron" :class="{ open: sections.clubUpcoming }">▶</span>
-          <span class="text-xs text-muted font-bold" style="text-transform: uppercase; letter-spacing: 0.5px;">Komende wedstrijden clubs</span>
-        </div>
-        <template v-if="sections.clubUpcoming">
-          <div v-for="group in clubUpcomingGrouped" :key="group.date" class="card" style="margin-bottom: 8px;">
-            <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
+        <!-- Today's matches: per followed competition -->
+        <div v-for="group in todayCompetitionGroups" :key="group.compId" style="margin-top: 16px;">
+          <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">
+            <router-link :to="`/competition/${group.compId}`" style="text-decoration: none; color: inherit;">{{ group.compName }}</router-link> — vandaag
+          </div>
+          <div class="card">
             <div
               v-for="match in group.matches"
               :key="match.matchId"
@@ -63,60 +59,40 @@
             >
               <div class="fixture-row" style="cursor: pointer;">
                 <div class="fixture-home">
-                  <span>{{ match.homeClub }}</span>
+                  <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
                   <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
                 </div>
                 <div class="fixture-center">
-                  <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
+                  <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
                   <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                  <span v-if="match.status && match.status !== 'scheduled'" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended' }">{{ statusLabel(match.status) }}</span>
+                  <span
+                    v-if="match.status !== 'scheduled'"
+                    class="badge"
+                    :class="{
+                      'badge-live': match.status === 'live',
+                      'badge-halftime': match.status === 'halftime',
+                      'badge-ended': match.status === 'ended',
+                    }"
+                  >{{ statusLabel(match.status) }}</span>
                 </div>
                 <div class="fixture-away">
                   <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span>{{ match.awayClub }}</span>
+                  <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
                 </div>
               </div>
-              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
             </div>
           </div>
-        </template>
-      </div>
-
-      <!-- Upcoming competition matches -->
-      <div v-if="competitionUpcomingGrouped.length > 0" style="margin-top: 16px;">
-        <div class="collapsible-header" @click="toggleSection('compUpcoming')" style="padding: 0 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-          <span class="collapse-chevron" :class="{ open: sections.compUpcoming }">▶</span>
-          <span class="text-xs text-muted font-bold" style="text-transform: uppercase; letter-spacing: 0.5px;">Komende wedstrijden competities</span>
         </div>
-        <template v-if="sections.compUpcoming">
-          <div v-for="group in competitionUpcomingGrouped" :key="group.date" class="card" style="margin-bottom: 8px;">
-            <div class="text-xs text-muted font-bold" style="margin-bottom: 6px;">{{ formatDateShort(group.date) }}</div>
-            <div
-              v-for="match in group.matches"
-              :key="match.matchId"
-              class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}`)"
-            >
-              <div class="fixture-row" style="cursor: pointer;">
-                <div class="fixture-home">
-                  <span>{{ match.homeClub }}</span>
-                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-                </div>
-                <div class="fixture-center">
-                  <span v-if="!match.status || match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                  <span v-if="match.status && match.status !== 'scheduled'" class="badge" :class="{ 'badge-live': match.status === 'live', 'badge-halftime': match.status === 'halftime', 'badge-ended': match.status === 'ended' }">{{ statusLabel(match.status) }}</span>
-                </div>
-                <div class="fixture-away">
-                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span>{{ match.awayClub }}</span>
-                </div>
-              </div>
-              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
-            </div>
+
+        <!-- Empty state -->
+        <div v-if="todayClubMatches.length === 0 && todayCompetitionGroups.length === 0" style="margin-top: 16px;">
+          <div class="card text-muted text-sm" style="text-align: center;">
+            Geen wedstrijden vandaag.
           </div>
-        </template>
-      </div>
+        </div>
+      </template>
+
+
   </div>
 </template>
 
@@ -132,17 +108,7 @@ const favoritesStore = useFavoritesStore()
 
 const loading = ref(false)
 const allTodayMatches = ref([])
-const allUpcomingMatches = ref([])
 let refreshInterval = null
-
-// Collapsible section state, persisted in localStorage
-const SECTIONS_KEY = 'dashboard-sections'
-const sections = ref(JSON.parse(localStorage.getItem(SECTIONS_KEY) || '{"clubUpcoming":false,"compUpcoming":false}'))
-
-function toggleSection(key) {
-  sections.value[key] = !sections.value[key]
-  localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections.value))
-}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -150,52 +116,47 @@ function statusLabel(status) {
   return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status
 }
 
-function formatDateShort(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
 // Sort: live first, halftime, scheduled, ended last
 const statusOrder = { live: 0, halftime: 1, scheduled: 2, ended: 3 }
 
-const todayMatches = computed(() => {
-  return [...allTodayMatches.value].sort((a, b) => {
+function sortMatches(matches) {
+  return [...matches].sort((a, b) => {
     const oa = statusOrder[a.status] ?? 9
     const ob = statusOrder[b.status] ?? 9
     if (oa !== ob) return oa - ob
     return a.time.localeCompare(b.time)
   })
-})
-
-function groupByDate(matches) {
-  const groups = []
-  let current = null
-  for (const m of matches) {
-    if (!current || current.date !== m._date) {
-      current = { date: m._date, matches: [] }
-      groups.push(current)
-    }
-    current.matches.push(m)
-  }
-  return groups
 }
 
-const clubUpcomingGrouped = computed(() => {
+const todayMatches = computed(() => sortMatches(allTodayMatches.value))
+
+// Today's matches for followed clubs
+const todayClubMatches = computed(() => {
   const favClubIds = new Set(favoritesStore.clubs.map(c => c.id))
-  const sorted = allUpcomingMatches.value
-    .filter(m => favClubIds.has(m.homeClubId) || favClubIds.has(m.awayClubId))
-    .sort((a, b) => a._date.localeCompare(b._date) || a.time.localeCompare(b.time))
-    .slice(0, 10)
-  return groupByDate(sorted)
+  return sortMatches(
+    allTodayMatches.value.filter(m => favClubIds.has(m.homeClubId) || favClubIds.has(m.awayClubId))
+  )
 })
 
-const competitionUpcomingGrouped = computed(() => {
-  const favCompIds = new Set(favoritesStore.competitions.map(c => c.id))
-  const sorted = allUpcomingMatches.value
-    .filter(m => favCompIds.has(m._compId))
-    .sort((a, b) => a._date.localeCompare(b._date) || a.time.localeCompare(b.time))
-    .slice(0, 15)
-  return groupByDate(sorted)
+// Today's matches grouped per followed competition
+const todayCompetitionGroups = computed(() => {
+  const favComps = favoritesStore.competitions
+  if (favComps.length === 0) return []
+  const favCompIds = new Set(favComps.map(c => c.id))
+  const groups = []
+  for (const comp of favComps) {
+    const matches = sortMatches(
+      allTodayMatches.value.filter(m => m._compId === comp.id)
+    )
+    if (matches.length > 0) {
+      groups.push({
+        compId: comp.id,
+        compName: matches[0]._compName || comp.name || `Competitie ${comp.id}`,
+        matches,
+      })
+    }
+  }
+  return groups
 })
 
 async function fetchDashboardData() {
@@ -213,17 +174,21 @@ async function fetchDashboardData() {
     const compIdArr = [...allCompIds]
 
     // Fetch in parallel:
-    // 1. Per favorite club: team_programma1 (has live status) + team uitslagen (for ended today)
-    // 2. Per favorite competition: programma + uitslagen (for matches not involving fav clubs)
+    // 1. Per favorite club: team_programma1 (has live status)
+    // 2. Per favorite competition: uitslagen + programma (for today's matches)
     // 3. Competition names
     const favCompIds = favComps.map(c => c.id)
-    const [clubProgrammaResults, compUitslResults, compProgrammaResults, nameResults] = await Promise.all([
+    const [clubProgrammaResults, clubUitslagenResults, compUitslResults, compProgrammaResults, nameResults] = await Promise.all([
       Promise.all(favClubs.map(club =>
         api.getClubProgramma(club.id)
           .then(data => ({ clubId: club.id, compId: club.competitionId, data }))
           .catch(() => ({ clubId: club.id, compId: club.competitionId, data: [] }))
       )),
-      // Only fetch uitslagen for explicitly favorited competitions (club matches come from team_programma1)
+      Promise.all(favClubs.map(club =>
+        api.getClubUitslagen(club.id)
+          .then(data => ({ clubId: club.id, compId: club.competitionId, data }))
+          .catch(() => ({ clubId: club.id, compId: club.competitionId, data: [] }))
+      )),
       Promise.all(favCompIds.map(id => api.getResults(id).catch(() => []))),
       Promise.all(favComps.map(comp =>
         api.getFixtures(comp.id).then(data => ({ compId: comp.id, data })).catch(() => ({ compId: comp.id, data: [] }))
@@ -241,23 +206,35 @@ async function fetchDashboardData() {
 
     const seen = new Set()
     const todayList = []
-    const upcomingList = []
 
     // 1. Process club programma (team_programma1) — has real-time status
     for (const { compId, data } of clubProgrammaResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
+        if (group.date !== today) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
           match._compId = match.competitionId || compId
           match._compName = compNames[match._compId] || null
           match._date = group.date
-          if (group.date === today) {
-            todayList.push(match)
-          } else {
-            upcomingList.push(match)
-          }
+          todayList.push(match)
+        }
+      }
+    }
+
+    // 1b. Process club uitslagen (team_uitslagen1) — today's ended matches
+    for (const { compId, data } of clubUitslagenResults) {
+      if (!Array.isArray(data)) continue
+      for (const group of data) {
+        if (group.date !== today) continue
+        for (const match of (group.matches || [])) {
+          if (seen.has(match.matchId)) continue
+          seen.add(match.matchId)
+          match._compId = match.competitionId || compId
+          match._compName = compNames[match._compId] || null
+          match._date = group.date
+          todayList.push(match)
         }
       }
     }
@@ -279,26 +256,23 @@ async function fetchDashboardData() {
       }
     }
 
-    // 3. Process competition programma (for fav comp upcoming not already seen)
+    // 3. Process competition programma (for today's matches not already seen)
     for (const { compId, data } of compProgrammaResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
+        if (group.date !== today) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
           match._compId = compId
           match._compName = compNames[compId] || null
           match._date = group.date
-          if (group.date === today) {
-            todayList.push(match)
-          } else {
-            upcomingList.push(match)
-          }
+          todayList.push(match)
         }
       }
     }
 
-    // 4. Enrich today's non-ended matches with real-time data (score fields from list endpoints lag behind)
+    // 4. Enrich today's non-ended matches with real-time data
     const toEnrich = todayList.filter(m => m.status !== 'ended')
     if (toEnrich.length > 0) {
       const enriched = await Promise.all(
@@ -320,7 +294,6 @@ async function fetchDashboardData() {
     }
 
     allTodayMatches.value = todayList
-    allUpcomingMatches.value = upcomingList
   } finally {
     loading.value = false
   }

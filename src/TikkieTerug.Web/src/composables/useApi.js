@@ -49,7 +49,11 @@ export function useApi() {
 
     getClubInfo: (clubId) => fetchJson(`/clubs/${clubId}/info`),
 
+    getCompetitions: () => fetchJson('/competitions'),
+
     getClubProgramma: (clubId) => fetchJson(`/clubs/${clubId}/programma`),
+
+    getClubUitslagen: (clubId) => fetchJson(`/clubs/${clubId}/uitslagen`),
 
     getMatchHistory: (homeId, awayId, homeCat, awayCat) =>
       fetchJson(`/matches/history?home=${homeId}&away=${awayId}&homeCat=${encodeURIComponent(homeCat)}&awayCat=${encodeURIComponent(awayCat)}`),

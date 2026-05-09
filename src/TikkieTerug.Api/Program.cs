@@ -19,7 +19,11 @@ var dbPath = Path.Combine(dataDir, "tikkieterug.db");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")
         ?? $"Data Source={dbPath}"));
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("", client =>
+{
+    client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true, NoStore = true };
+    client.DefaultRequestHeaders.Pragma.Add(new System.Net.Http.Headers.NameValueHeaderValue("no-cache"));
+});
 
 var app = builder.Build();
 
@@ -282,6 +286,56 @@ app.MapGet("/clubs/{id:int}", async (AppDbContext db, IHttpClientFactory httpFac
     });
 })
 .WithName("GetClub");
+
+// GET /competitions — all competitions grouped by afdeling, parsed from klassen.js
+app.MapGet("/competitions", async (IHttpClientFactory httpFactory) =>
+{
+    var client = httpFactory.CreateClient();
+    var compJs = await client.GetStringAsync("https://voetbalnederland.nl/js/klassen.js");
+
+    // Parse: COMP[0] = new comp(202501001,'EreD',0,0);
+    var compRegex = new Regex(
+        @"COMP\[\d+\]\s*=\s*new\s+comp\((\d+),'([^']*)',(\d+),(\d+)\)",
+        RegexOptions.Compiled);
+
+    // Afdeling mapping: index → (id, name)
+    var afdelingen = new (int id, string name)[]
+    {
+        (1, "Landelijk"), (2, "Noord"), (3, "Oost"), (4, "West 1"),
+        (8, "West 2"), (6, "Zuid 1"), (7, "Zuid 2"), (9, "Dames")
+    };
+
+    var competitions = compRegex.Matches(compJs)
+        .Select(m => new
+        {
+            id = int.Parse(m.Groups[1].Value),
+            name = m.Groups[2].Value,
+            afdelingIndex = int.Parse(m.Groups[3].Value),
+            sdCode = int.Parse(m.Groups[4].Value)
+        })
+        .ToList();
+
+    var result = afdelingen.Select((afd, idx) => new
+    {
+        afdelingId = afd.id,
+        afdelingName = afd.name,
+        competitions = competitions
+            .Where(c => c.afdelingIndex == idx)
+            .Select(c => new
+            {
+                c.id,
+                c.name,
+                speeldag = c.sdCode switch { 1 => "Zaterdag", 2 => "Zondag", _ => (string?)null }
+            })
+            .ToList()
+    })
+    .Where(a => a.competitions.Count > 0)
+    .ToList();
+
+    return Results.Ok(result);
+})
+.WithName("GetCompetitions")
+.WithDescription("Alle competities gegroepeerd per afdeling, geparsed vanuit klassen.js");
 
 // GET /competitions/{id}/uitslagen — all match results in a competition, grouped by date
 app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
@@ -973,6 +1027,92 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
 })
 .WithName("GetClubProgramma")
 .WithDescription("Programma van een club met live status, gegroepeerd op datum");
+
+// GET /clubs/{id}/uitslagen — team results from team_uitslagen1, grouped by date
+app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
+{
+    var club = await db.FindAsync<Club>(id);
+    if (club is null) return Results.NotFound();
+
+    var sdCode = club.Speeldag switch
+    {
+        "Zaterdag" => "ZA", "Zondag" => "ZO", "Dames" => "DA",
+        _ => club.Speeldag ?? "ZA"
+    };
+    var seizoen = (DateTime.Now.Month >= 8 ? DateTime.Now.Year : DateTime.Now.Year - 1).ToString();
+    var clubIdStr = (club.ParentClubId ?? club.Id).ToString();
+
+    var client = httpFactory.CreateClient();
+    var response = await client.PostAsync(
+        "https://voetbaloost.nl/SVC_Teams.asmx/team_uitslagen1",
+        new StringContent($"{{\"id\":\"{clubIdStr}\",\"sd\":\"{sdCode}\",\"seizoen\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
+    var json = await response.Content.ReadAsStringAsync();
+    var data = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+
+    if (string.IsNullOrEmpty(data)) return Results.Ok(Array.Empty<object>());
+
+    var rows = data.Split('#', StringSplitOptions.RemoveEmptyEntries);
+    var today = DateOnly.FromDateTime(DateTime.Today);
+
+    var clubIds = rows.SelectMany(r =>
+    {
+        var f = r.Split(';');
+        return new[] { int.Parse(f[0]), int.Parse(f[1]) };
+    }).Distinct().ToArray();
+
+    var clubNames = await db.Clubs
+        .Where(c => clubIds.Contains(c.Id))
+        .ToDictionaryAsync(c => c.Id, c => c.Name);
+
+    var grouped = rows
+        .Select(r =>
+        {
+            var f = r.Split(';');
+            var homeId = int.Parse(f[0]);
+            var awayId = int.Parse(f[1]);
+            var gespeeld = int.Parse(f[4]);
+            var statusCode = gespeeld == 1 ? 3 : int.Parse(f[6]);
+            var status = statusCode switch
+            {
+                0 => "scheduled", 1 => "live", 2 => "halftime",
+                3 => "ended", 4 => "suspended", 5 => "cancelled",
+                _ => "unknown"
+            };
+            return new
+            {
+                date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
+                homeClubId = homeId,
+                homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
+                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                awayClubId = awayId,
+                awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
+                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                homeScore = int.Parse(f[2]),
+                awayScore = int.Parse(f[3]),
+                status,
+                time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                matchId = long.Parse(f[17]),
+                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
+            };
+        })
+        .GroupBy(m => m.date)
+        .OrderByDescending(g => g.Key)
+        .Select(g => new
+        {
+            date = g.Key,
+            matches = g.Select(m => new
+            {
+                m.homeClubId, m.homeClub, m.homeLogo,
+                m.awayClubId, m.awayClub, m.awayLogo,
+                m.homeScore, m.awayScore, m.status,
+                m.time, m.matchId, m.competitionId
+            })
+        });
+
+    return Results.Ok(grouped);
+})
+.WithName("GetClubUitslagen")
+.WithDescription("Uitslagen van een club, gegroepeerd op datum");
 
 // GET /clubs/{id}/team — full team page data (photo, results, fixtures, standings, top scorers)
 app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory httpFactory, int id) =>
