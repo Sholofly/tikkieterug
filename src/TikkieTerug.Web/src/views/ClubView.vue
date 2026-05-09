@@ -3,27 +3,23 @@
     <div v-if="loading" class="loading text-center">Laden...</div>
 
     <div v-else-if="data">
-      <!-- Team photo -->
-      <div v-if="data.club.teamPhoto" class="card" style="padding: 0; overflow: hidden; margin-bottom: 10px;">
-        <img :src="data.club.teamPhoto" :alt="data.club.name" style="width: 100%; display: block;" />
-      </div>
-
       <!-- Club header -->
-      <div class="card" style="margin-bottom: 10px;">
-        <div class="flex items-center gap-2">
-          <img :src="data.club.logo" :alt="data.club.name" class="club-logo-lg" />
-          <div>
-            <h1 class="font-bold" style="font-size: 1.2rem;">{{ data.club.name }}</h1>
+      <div class="card" style="padding: 0; overflow: hidden; margin-bottom: 10px;">
+        <img v-if="data.club.teamPhoto" :src="data.club.teamPhoto" :alt="data.club.name" style="width: 100%; display: block; max-height: 160px; object-fit: cover;" />
+        <div class="flex items-center gap-2" style="padding: 10px 12px;">
+          <img :src="data.club.logo" :alt="data.club.name" class="club-logo-sm" style="width: 32px; height: 32px;" />
+          <div style="flex: 1; min-width: 0;">
+            <h1 class="font-bold" style="font-size: 1.05rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ data.club.name }}</h1>
             <router-link
               v-if="data.club.competitionId"
               :to="`/competition/${data.club.competitionId}`"
-              class="text-sm"
+              class="text-xs"
+              style="color: var(--text-secondary);"
             >{{ data.club.competitionName || 'Competitie' }}</router-link>
           </div>
           <button
             class="btn-favorite"
             :class="isFavorite ? 'active' : ''"
-            style="margin-left: auto;"
             @click="toggleFavorite"
           >{{ isFavorite ? '❤️ Volgt' : '🤍 Volgen' }}</button>
         </div>
