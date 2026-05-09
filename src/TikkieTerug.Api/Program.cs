@@ -403,6 +403,8 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 awayScore = int.Parse(f[3]),
                 status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                homeRedCards = int.TryParse(f[7], out var hr1) ? hr1 : 0,
+                awayRedCards = int.TryParse(f[8], out var ar1) ? ar1 : 0,
                 matchId = long.Parse(f[17])
             };
         })
@@ -450,7 +452,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
             m.awayClubId, m.awayClub, m.awayLogo,
             homeScore = enriched.TryGetValue(m.matchId, out var e) ? e.home : m.homeScore,
             awayScore = enriched.TryGetValue(m.matchId, out var e2) ? e2.away : m.awayScore,
-            m.status, m.time, m.matchId
+            m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId
         })
         .GroupBy(m => m.date)
         .OrderByDescending(g => g.Key)
@@ -462,7 +464,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 m.homeClubId, m.homeClub, m.homeLogo,
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore,
-                m.status, m.time, m.matchId
+                m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId
             })
         });
 
@@ -725,9 +727,10 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     catch { }
 
     // Parse scorers
-    // Format: [runningScore];[minute];[playerId];[playerName];[side]#...@motm;[motmPlayerId]#
-    // side: 0 = home, 5 = away
+    // Format: [value];[minute];[playerId];[playerName];[eventType]#...@motm;[motmPlayerId]#
+    // eventType: 0 = home goal, 5 = away goal, 1 = home yellow, 6 = away yellow, 2 = home red, 7 = away red
     var scorers = new List<object>();
+    var cards = new List<object>();
     int? manOfTheMatchId = null;
 
     var scrJson = await scrTask.Result.Content.ReadAsStringAsync();
@@ -736,7 +739,7 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     if (!string.IsNullOrEmpty(scrData))
     {
         var parts = scrData.Split('@');
-        var goalsSection = parts[0];
+        var eventsSection = parts[0];
 
         // Parse man of the match from "motm;[playerId]#"
         if (parts.Length > 1)
@@ -746,26 +749,60 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
                 manOfTheMatchId = motmId;
         }
 
-        // Parse individual goals
-        foreach (var entry in goalsSection.Split('#', StringSplitOptions.RemoveEmptyEntries))
+        // Parse individual events
+        foreach (var entry in eventsSection.Split('#', StringSplitOptions.RemoveEmptyEntries))
         {
             var g = entry.Split(';');
             if (g.Length < 5) continue;
-            var side = g[4] == "0" ? "home" : "away";
-            scorers.Add(new
+            if (!int.TryParse(g[4], out var eventType)) continue;
+
+            var minute = int.Parse(g[1]);
+            var playerId = int.Parse(g[2]);
+            var player = g[3].Trim();
+            var teamScore = int.Parse(g[0]);
+
+            if (eventType == 0 || eventType == 5)
             {
-                minute = int.Parse(g[1]),
-                playerId = int.Parse(g[2]),
-                player = g[3].Trim(),
-                side,
-                teamScore = int.Parse(g[0])
-            });
+                // Goal event
+                scorers.Add(new
+                {
+                    minute,
+                    playerId,
+                    player,
+                    side = eventType == 0 ? "home" : "away",
+                    teamScore
+                });
+            }
+            else
+            {
+                // Card event: type 1/2/3 = home, type 6/7/8 = away
+                // value: 1 = direct red, 2 = yellow, 3 = second yellow
+                var cardSide = eventType < 5 ? "home" : "away";
+                var cardType = teamScore switch
+                {
+                    1 => "red",
+                    3 => "second_yellow",
+                    _ => "yellow"
+                };
+                cards.Add(new
+                {
+                    minute,
+                    playerId,
+                    player,
+                    side = cardSide,
+                    cardType
+                });
+            }
         }
 
         // Sort chronologically
         scorers = scorers
             .OrderBy(s => ((dynamic)s).minute)
             .ThenBy(s => ((dynamic)s).teamScore)
+            .ToList();
+
+        cards = cards
+            .OrderBy(c => ((dynamic)c).minute)
             .ToList();
     }
 
@@ -842,6 +879,7 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         awayRedCards = int.Parse(f[8]),
         manOfTheMatchId,
         goals = scorers,
+        cards,
         homeReport = homeReportData,
         awayReport = awayReportData
     };
@@ -911,6 +949,8 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 awayScore = int.Parse(f[3]),
                 status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                homeRedCards = int.TryParse(f[7], out var hr2) ? hr2 : 0,
+                awayRedCards = int.TryParse(f[8], out var ar2) ? ar2 : 0,
                 matchId = long.Parse(f[17])
             };
         })
@@ -931,6 +971,8 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 m.awayScore,
                 m.status,
                 m.time,
+                m.homeRedCards,
+                m.awayRedCards,
                 m.matchId
             })
         });
@@ -1005,6 +1047,8 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 awayScore = int.Parse(f[3]),
                 status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                homeRedCards = int.TryParse(f[7], out var hr3) ? hr3 : 0,
+                awayRedCards = int.TryParse(f[8], out var ar3) ? ar3 : 0,
                 matchId = long.Parse(f[17]),
                 competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
             };
@@ -1019,6 +1063,7 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 m.homeClubId, m.homeClub, m.homeLogo,
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
+                m.homeRedCards, m.awayRedCards,
                 m.time, m.matchId, m.competitionId
             })
         });
@@ -1091,6 +1136,8 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 awayScore = int.Parse(f[3]),
                 status,
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                homeRedCards = int.TryParse(f[7], out var hr4) ? hr4 : 0,
+                awayRedCards = int.TryParse(f[8], out var ar4) ? ar4 : 0,
                 matchId = long.Parse(f[17]),
                 competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
             };
@@ -1105,6 +1152,7 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 m.homeClubId, m.homeClub, m.homeLogo,
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
+                m.homeRedCards, m.awayRedCards,
                 m.time, m.matchId, m.competitionId
             })
         });
@@ -1250,6 +1298,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     homeReport = f[11] == "1",
                     awayReport = f[12] == "1",
                     time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                    homeRedCards = int.TryParse(f[7], out var hr5) ? hr5 : 0,
+                    awayRedCards = int.TryParse(f[8], out var ar5) ? ar5 : 0,
                     matchId = long.Parse(f[17])
                 };
             }
@@ -1291,6 +1341,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     awayScore = int.Parse(f[3]),
                     status,
                     time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
+                    homeRedCards = int.TryParse(f[7], out var hr6) ? hr6 : 0,
+                    awayRedCards = int.TryParse(f[8], out var ar6) ? ar6 : 0,
                     matchId = long.Parse(f[17])
                 };
             }

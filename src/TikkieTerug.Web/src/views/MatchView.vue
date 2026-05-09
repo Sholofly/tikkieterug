@@ -29,8 +29,8 @@
             />
             <div v-else class="club-logo-lg" style="display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; background: #eee; border-radius: 50%; font-size: 1.5rem;">⚽</div>
             <div class="font-bold">{{ match.homeClub }}</div>
-            <div v-if="match.homeRedCards > 0" style="color: #dc2626; margin-top: 0.25rem;">
-              <span v-for="n in match.homeRedCards" :key="n" style="margin-right: 2px;">🟥</span>
+            <div v-if="match.homeRedCards > 0" style="display: flex; justify-content: flex-end; gap: 3px; margin-top: 0.2rem;">
+              <span v-for="n in match.homeRedCards" :key="n" class="red-stripe"></span>
             </div>
           </div>
 
@@ -63,8 +63,8 @@
             />
             <div v-else class="club-logo-lg" style="display: flex; align-items: center; justify-content: center; margin: 0 auto 0.5rem; background: #eee; border-radius: 50%; font-size: 1.5rem;">⚽</div>
             <div class="font-bold">{{ match.awayClub }}</div>
-            <div v-if="match.awayRedCards > 0" style="color: #dc2626; margin-top: 0.25rem;">
-              <span v-for="n in match.awayRedCards" :key="n" style="margin-right: 2px;">🟥</span>
+            <div v-if="match.awayRedCards > 0" style="display: flex; justify-content: flex-end; gap: 3px; margin-top: 0.2rem;">
+              <span v-for="n in match.awayRedCards" :key="n" class="red-stripe"></span>
             </div>
           </div>
         </div>
@@ -78,37 +78,43 @@
         </div>
       </div>
 
-      <!-- Goals Timeline -->
-      <div v-if="match.goals && match.goals.length > 0" class="card">
+      <!-- Wedstrijdverloop -->
+      <div v-if="timeline.length > 0" class="card">
         <div style="padding: 1rem 1rem 0.5rem; border-bottom: 1px solid var(--border);">
-          <span class="font-bold">Doelpunten</span>
+          <span class="font-bold">Wedstrijdverloop</span>
         </div>
         <div style="padding: 0.5rem 0;">
           <div
-            v-for="(goal, index) in goalsWithScore"
+            v-for="(evt, index) in timeline"
             :key="index"
             class="goal-row"
           >
             <!-- Home side -->
             <div class="goal-col goal-col-home">
-              <template v-if="goal.side === 'home'">
-                <span class="goal-player-name">{{ goal.player }}</span>
-                <span class="goal-min">{{ goal.minute }}'</span>
-                <span class="goal-icon">⚽</span>
+              <template v-if="evt.side === 'home'">
+                <span class="goal-player-name">{{ evt.player }}</span>
+                <span class="goal-min">{{ evt.minute }}'</span>
+                <span class="goal-icon" v-if="evt.type === 'goal'">⚽</span>
+                <svg v-else-if="evt.cardType === 'yellow'" class="card-icon" viewBox="0 0 14 18"><rect width="14" height="18" rx="2" fill="#facc15" /></svg>
+                <svg v-else-if="evt.cardType === 'red'" class="card-icon" viewBox="0 0 14 18"><rect width="14" height="18" rx="2" fill="#dc2626" /></svg>
+                <svg v-else class="card-icon" viewBox="0 0 14 18"><defs><clipPath :id="'yrL'+index"><polygon points="0,0 14,0 0,18" /></clipPath><clipPath :id="'yrR'+index"><polygon points="14,0 14,18 0,18" /></clipPath></defs><rect :clip-path="`url(#yrL${index})`" width="14" height="18" rx="2" fill="#facc15" /><rect :clip-path="`url(#yrR${index})`" width="14" height="18" rx="2" fill="#dc2626" /></svg>
               </template>
             </div>
 
             <!-- Running score center -->
-            <div class="goal-col-center">
-              {{ goal.runningHome }} – {{ goal.runningAway }}
+            <div class="goal-col-center" :style="evt.type === 'card' ? 'visibility: hidden' : ''">
+              {{ evt.runningHome }} – {{ evt.runningAway }}
             </div>
 
             <!-- Away side -->
             <div class="goal-col goal-col-away">
-              <template v-if="goal.side === 'away'">
-                <span class="goal-icon">⚽</span>
-                <span class="goal-min">{{ goal.minute }}'</span>
-                <span class="goal-player-name">{{ goal.player }}</span>
+              <template v-if="evt.side === 'away'">
+                <span class="goal-icon" v-if="evt.type === 'goal'">⚽</span>
+                <svg v-else-if="evt.cardType === 'yellow'" class="card-icon" viewBox="0 0 14 18"><rect width="14" height="18" rx="2" fill="#facc15" /></svg>
+                <svg v-else-if="evt.cardType === 'red'" class="card-icon" viewBox="0 0 14 18"><rect width="14" height="18" rx="2" fill="#dc2626" /></svg>
+                <svg v-else class="card-icon" viewBox="0 0 14 18"><defs><clipPath :id="'yrLA'+index"><polygon points="0,0 14,0 0,18" /></clipPath><clipPath :id="'yrRA'+index"><polygon points="14,0 14,18 0,18" /></clipPath></defs><rect :clip-path="`url(#yrLA${index})`" width="14" height="18" rx="2" fill="#facc15" /><rect :clip-path="`url(#yrRA${index})`" width="14" height="18" rx="2" fill="#dc2626" /></svg>
+                <span class="goal-min">{{ evt.minute }}'</span>
+                <span class="goal-player-name">{{ evt.player }}</span>
               </template>
             </div>
           </div>
@@ -116,7 +122,7 @@
       </div>
 
       <div v-else class="text-center text-muted text-sm" style="margin-top: 1rem;">
-        Nog geen doelpunten.
+        Geen wedstrijdverloop beschikbaar.
       </div>
 
       <!-- Wedstrijdverslagen -->
@@ -219,23 +225,26 @@ const statusLabel = computed(() => {
   }
 })
 
-const goalsWithScore = computed(() => {
-  if (!match.value?.goals) return []
+const timeline = computed(() => {
+  if (!match.value) return []
+  const goals = (match.value.goals || []).map(g => ({ ...g, type: 'goal' }))
+  const cards = (match.value.cards || []).map(c => ({ ...c, type: 'card' }))
+  const all = [...goals, ...cards].sort((a, b) => a.minute - b.minute)
+
   let homeRunning = 0
   let awayRunning = 0
-  return match.value.goals.map((goal) => {
-    if (goal.side === 'home') {
-      homeRunning++
-    } else {
-      awayRunning++
+  return all.map(evt => {
+    if (evt.type === 'goal') {
+      if (evt.side === 'home') homeRunning++
+      else awayRunning++
     }
-    return {
-      ...goal,
-      runningHome: homeRunning,
-      runningAway: awayRunning,
-    }
+    return { ...evt, runningHome: homeRunning, runningAway: awayRunning }
   })
 })
+
+function eventIcon(evt) {
+  // no longer used, icons are inline in template
+}
 
 function setupStickyObserver() {
   if (!headerCard.value) return
