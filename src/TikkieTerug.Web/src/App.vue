@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 
-const topLevelRoutes = ['home', 'nieuws', 'competities', 'favorites', 'meer']
+const topLevelRoutes = ['home', 'competities', 'favorites', 'meer']
 const showBack = () => !topLevelRoutes.includes(route.name)
 </script>
 
@@ -39,10 +39,6 @@ const showBack = () => !topLevelRoutes.includes(route.name)
     <router-link to="/" class="bottom-nav-item" :class="{ active: route.name === 'home' }">
       <span class="bottom-nav-icon">⚽</span>
       <span class="bottom-nav-label">Wedstrijden</span>
-    </router-link>
-    <router-link to="/nieuws" class="bottom-nav-item" :class="{ active: route.name === 'nieuws' }">
-      <span class="bottom-nav-icon">📰</span>
-      <span class="bottom-nav-label">Nieuws</span>
     </router-link>
     <router-link to="/competities" class="bottom-nav-item" :class="{ active: route.name === 'competities' }">
       <span class="bottom-nav-icon">🏆</span>
