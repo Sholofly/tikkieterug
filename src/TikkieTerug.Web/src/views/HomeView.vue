@@ -40,6 +40,15 @@
                   <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
                 </div>
               </div>
+              <div v-if="match.homeRedCards || match.awayRedCards" class="fixture-red-row">
+                <div style="display: flex; justify-content: flex-end; gap: 2px; padding-right: 26px;">
+                  <span v-for="n in (match.homeRedCards || 0)" :key="'hr'+n" class="red-stripe"></span>
+                </div>
+                <div></div>
+                <div style="display: flex; gap: 2px; padding-left: 26px;">
+                  <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
+                </div>
+              </div>
               <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
             </div>
           </div>
@@ -78,6 +87,15 @@
                 <div class="fixture-away">
                   <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
                   <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
+                </div>
+              </div>
+              <div v-if="match.homeRedCards || match.awayRedCards" class="fixture-red-row">
+                <div style="display: flex; justify-content: flex-end; gap: 2px; padding-right: 26px;">
+                  <span v-for="n in (match.homeRedCards || 0)" :key="'hr'+n" class="red-stripe"></span>
+                </div>
+                <div></div>
+                <div style="display: flex; gap: 2px; padding-left: 26px;">
+                  <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
                 </div>
               </div>
             </div>
@@ -278,7 +296,7 @@ async function fetchDashboardData() {
       const enriched = await Promise.all(
         toEnrich.map(m =>
           api.getMatch(m.matchId)
-            .then(detail => ({ matchId: m.matchId, status: detail.status, homeScore: detail.homeScore, awayScore: detail.awayScore }))
+            .then(detail => ({ matchId: m.matchId, status: detail.status, homeScore: detail.homeScore, awayScore: detail.awayScore, homeRedCards: detail.homeRedCards, awayRedCards: detail.awayRedCards }))
             .catch(() => null)
         )
       )
@@ -289,6 +307,8 @@ async function fetchDashboardData() {
           match.status = detail.status
           match.homeScore = detail.homeScore
           match.awayScore = detail.awayScore
+          match.homeRedCards = detail.homeRedCards
+          match.awayRedCards = detail.awayRedCards
         }
       }
     }
