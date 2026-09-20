@@ -701,23 +701,25 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     // Fields: [0]=homeId [1]=awayId [2]=homeScore [3]=awayScore [4]=gespeeld(True/False)
     // [5]=dayOffset [6]=status [7]=homeRed [8]=awayRed [9]=hour [10]=minute
     // [11]=homeReport [12]=awayReport [13]=compId [14]=soort [15]=cixVoor [16]=cixTegen [17]=matchId
-    // League matches use s=1; cup matches use s=2. Try the league feed first,
-    // then fall back to the cup feed and use the selected source for all follow-up calls.
-    var matchSource = source is 1 or 2 ? source.Value : 1;
-    var matchResponse = await client.PostAsync(
-        "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
-        new StringContent($"{{\"w\":\"{id}\",\"s\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"));
-    var matchJson = await matchResponse.Content.ReadAsStringAsync();
-    var matchData = JsonDocument.Parse(matchJson).RootElement.GetProperty("d").GetString();
+    // The upstream service separates competition, cup and tournament matches by source.
+    // Use the source from an overview when present; otherwise try every known source.
+    var requestedSource = source is 1 or 2 or 3 or 4 ? source.Value : 1;
+    var sources = new[] { requestedSource }.Concat(new[] { 1, 2, 3, 4 }.Where(s => s != requestedSource));
+    string? matchData = null;
+    var matchSource = requestedSource;
 
-    if (string.IsNullOrEmpty(matchData))
+    foreach (var candidateSource in sources)
     {
-        matchSource = matchSource == 1 ? 2 : 1;
-        matchResponse = await client.PostAsync(
+        var matchResponse = await client.PostAsync(
             "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
-            new StringContent($"{{\"w\":\"{id}\",\"s\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"));
-        matchJson = await matchResponse.Content.ReadAsStringAsync();
+            new StringContent($"{{\"w\":\"{id}\",\"s\":\"{candidateSource}\"}}", Encoding.UTF8, "application/json"));
+        var matchJson = await matchResponse.Content.ReadAsStringAsync();
         matchData = JsonDocument.Parse(matchJson).RootElement.GetProperty("d").GetString();
+        if (!string.IsNullOrEmpty(matchData))
+        {
+            matchSource = candidateSource;
+            break;
+        }
     }
 
     if (string.IsNullOrEmpty(matchData)) return Results.NotFound();
