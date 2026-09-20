@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://localhost:5244',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/logos': {
+        target: 'http://localhost:5244',
+        changeOrigin: true
       }
     }
   }

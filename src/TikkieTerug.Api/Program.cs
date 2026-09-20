@@ -50,6 +50,57 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// GET /logos/{clubId} — proxy and persist club logos so clients do not hotlink voetbalnederland.nl.
+app.MapGet("/logos/{clubId:int:min(1)}", async (int clubId, IHttpClientFactory httpFactory, HttpContext context, CancellationToken cancellationToken) =>
+{
+    var logoDir = Path.Combine(dataDir, "logos");
+    var cachePath = Path.Combine(logoDir, $"{clubId}.gif");
+    byte[] logo;
+
+    if (File.Exists(cachePath))
+    {
+        logo = await File.ReadAllBytesAsync(cachePath, cancellationToken);
+    }
+    else
+    {
+        try
+        {
+            var client = httpFactory.CreateClient();
+            using var response = await client.GetAsync(
+                $"https://voetbalnederland.nl/l/{clubId}.gif",
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return Results.NotFound();
+            if (!response.IsSuccessStatusCode)
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+            if (contentType is not null && !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+
+            logo = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            if (logo.Length == 0)
+                return Results.StatusCode(StatusCodes.Status502BadGateway);
+
+            Directory.CreateDirectory(logoDir);
+            await File.WriteAllBytesAsync(cachePath, logo, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return Results.StatusCode(StatusCodes.Status502BadGateway);
+        }
+    }
+
+    context.Response.Headers.CacheControl = "public, max-age=2592000, immutable";
+    return Results.File(logo, "image/gif");
+});
+
 // POST /clubs/import — sync clubs from voetbalnederland.nl, enriched with first-team afdeling + speeldag
 app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFactory) =>
 {
@@ -244,7 +295,7 @@ app.MapGet("/clubs", async (AppDbContext db, IHttpClientFactory httpFactory, str
         c.Speeldag,
         c.CompetitionId,
         competitionName = c.CompetitionId.HasValue ? compNames.GetValueOrDefault(c.CompetitionId.Value) : (string?)null,
-        logo = $"https://voetbalnederland.nl/l/{c.ParentClubId ?? c.Id}.gif"
+        logo = $"/logos/{c.ParentClubId ?? c.Id}"
     });
 })
 .WithName("SearchClubs")
@@ -282,7 +333,7 @@ app.MapGet("/clubs/{id:int}", async (AppDbContext db, IHttpClientFactory httpFac
         club.Speeldag,
         club.CompetitionId,
         competitionName,
-        logo = $"https://voetbalnederland.nl/l/{club.ParentClubId ?? club.Id}.gif"
+        logo = $"/logos/{club.ParentClubId ?? club.Id}"
     });
 })
 .WithName("GetClub");
@@ -395,10 +446,10 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 date = matchDate.ToString("yyyy-MM-dd"),
                 homeClubId = homeId,
                 homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                homeLogo = $"/logos/{homeId}",
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                awayLogo = $"/logos/{awayId}",
                 homeScore = int.Parse(f[2]),
                 awayScore = int.Parse(f[3]),
                 status,
@@ -517,7 +568,7 @@ app.MapGet("/competitions/{id:int}/stand", async (IHttpClientFactory httpFactory
                 position = int.Parse(f[0]),
                 clubId = int.Parse(f[17]),
                 club = f[2],
-                logo = $"https://voetbalnederland.nl/l/{int.Parse(f[17])}.gif",
+                logo = $"/logos/{int.Parse(f[17])}",
                 played = int.Parse(f[4]),
                 won = int.Parse(f[5]),
                 drawn = int.Parse(f[6]),
@@ -561,7 +612,7 @@ app.MapGet("/competitions/{id:int}/periodestand", async (IHttpClientFactory http
                 position = int.Parse(f[0]),
                 clubId = int.Parse(f[3]),
                 club = f[2],
-                logo = $"https://voetbalnederland.nl/l/{int.Parse(f[3])}.gif",
+                logo = $"/logos/{int.Parse(f[3])}",
                 played = int.Parse(f[4]),
                 won = int.Parse(f[5]),
                 drawn = int.Parse(f[6]),
@@ -629,7 +680,7 @@ app.MapGet("/competitions/{id:int}/topscorers", async (IHttpClientFactory httpFa
                 played = int.TryParse(f[8], out var p) ? p : 0,
                 club = f[5],
                 clubId,
-                logo = $"https://voetbalnederland.nl/l/{clubId}.gif"
+                logo = $"/logos/{clubId}"
             };
         })
         .OrderByDescending(t => t.goals)
@@ -869,10 +920,10 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         competitionName,
         homeClubId = homeId,
         homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-        homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+        homeLogo = $"/logos/{homeId}",
         awayClubId = awayId,
         awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-        awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+        awayLogo = $"/logos/{awayId}",
         homeScore,
         awayScore,
         homeRedCards = int.Parse(f[7]),
@@ -941,10 +992,10 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 date = matchDate.ToString("yyyy-MM-dd"),
                 homeClubId = homeId,
                 homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                homeLogo = $"/logos/{homeId}",
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                awayLogo = $"/logos/{awayId}",
                 homeScore = int.Parse(f[2]),
                 awayScore = int.Parse(f[3]),
                 status,
@@ -1039,10 +1090,10 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 date = matchDate.ToString("yyyy-MM-dd"),
                 homeClubId = homeId,
                 homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                homeLogo = $"/logos/{homeId}",
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                awayLogo = $"/logos/{awayId}",
                 homeScore = int.Parse(f[2]),
                 awayScore = int.Parse(f[3]),
                 status,
@@ -1128,10 +1179,10 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
                 homeClubId = homeId,
                 homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                homeLogo = $"/logos/{homeId}",
                 awayClubId = awayId,
                 awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                awayLogo = $"/logos/{awayId}",
                 homeScore = int.Parse(f[2]),
                 awayScore = int.Parse(f[3]),
                 status,
@@ -1288,10 +1339,10 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
                     homeClubId = homeId,
                     homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                    homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                    homeLogo = $"/logos/{homeId}",
                     awayClubId = awayId,
                     awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                    awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                    awayLogo = $"/logos/{awayId}",
                     homeScore = int.Parse(f[2]),
                     awayScore = int.Parse(f[3]),
                     status,
@@ -1333,10 +1384,10 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     date = today.AddDays(int.Parse(f[5])).ToString("yyyy-MM-dd"),
                     homeClubId = homeId,
                     homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
-                    homeLogo = $"https://voetbalnederland.nl/l/{homeId}.gif",
+                    homeLogo = $"/logos/{homeId}",
                     awayClubId = awayId,
                     awayClub = clubNames.GetValueOrDefault(awayId, "Onbekend"),
-                    awayLogo = $"https://voetbalnederland.nl/l/{awayId}.gif",
+                    awayLogo = $"/logos/{awayId}",
                     homeScore = int.Parse(f[2]),
                     awayScore = int.Parse(f[3]),
                     status,
@@ -1407,7 +1458,7 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                             position = int.Parse(f[0]),
                             club = f[2],
                             clubId = cId,
-                            logo = $"https://voetbalnederland.nl/l/{cId}.gif",
+                            logo = $"/logos/{cId}",
                             played = int.Parse(f[4]),
                             won = int.Parse(f[5]),
                             drawn = int.Parse(f[6]),
@@ -1437,7 +1488,7 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                             position = int.Parse(f[0]),
                             club = f[1],
                             clubId = cId,
-                            logo = $"https://voetbalnederland.nl/l/{cId}.gif",
+                            logo = $"/logos/{cId}",
                             played = int.Parse(f[2]),
                             won = 0,
                             drawn = 0,
@@ -1487,7 +1538,7 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
         {
             club.Id,
             club.Name,
-            logo = $"https://voetbalnederland.nl/l/{club.ParentClubId ?? club.Id}.gif",
+            logo = $"/logos/{club.ParentClubId ?? club.Id}",
             club.CompetitionId,
             competitionName,
             club.Speeldag,
