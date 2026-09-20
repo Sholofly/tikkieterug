@@ -95,7 +95,7 @@
               v-for="match in group.matches"
               :key="match.matchId"
               class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}`)"
+              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
             >
               <div class="fixture-row" style="cursor: pointer;">
                <div class="fixture-home">
@@ -136,7 +136,7 @@
               v-for="match in group.matches"
               :key="match.matchId"
               class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}`)"
+              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
             >
               <div class="fixture-row" style="cursor: pointer;">
                <div class="fixture-home">

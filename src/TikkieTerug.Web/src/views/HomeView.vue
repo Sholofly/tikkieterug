@@ -15,7 +15,7 @@
               v-for="match in todayClubMatches"
               :key="match.matchId"
               class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}`)"
+              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
             >
               <div class="fixture-row" style="cursor: pointer;">
                 <div class="fixture-home">
@@ -64,7 +64,7 @@
               v-for="match in group.matches"
               :key="match.matchId"
               class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}`)"
+              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
             >
               <div class="fixture-row" style="cursor: pointer;">
                 <div class="fixture-home">
@@ -295,7 +295,7 @@ async function fetchDashboardData() {
     if (toEnrich.length > 0) {
       const enriched = await Promise.all(
         toEnrich.map(m =>
-          api.getMatch(m.matchId)
+          api.getMatch(m.matchId, m.source)
             .then(detail => ({ matchId: m.matchId, status: detail.status, homeScore: detail.homeScore, awayScore: detail.awayScore, homeRedCards: detail.homeRedCards, awayRedCards: detail.awayRedCards }))
             .catch(() => null)
         )

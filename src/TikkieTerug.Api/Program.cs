@@ -456,7 +456,8 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
                 homeRedCards = int.TryParse(f[7], out var hr1) ? hr1 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar1) ? ar1 : 0,
-                matchId = long.Parse(f[17])
+                matchId = long.Parse(f[17]),
+                source = int.TryParse(f[14], out var source) ? source : 1
             };
         })
         .ToList();
@@ -471,7 +472,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
             m.matchId,
             task = client.PostAsync(
                 "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
-                new StringContent($"{{\"s\":\"1\",\"w\":\"{m.matchId}\"}}", Encoding.UTF8, "application/json"))
+                new StringContent($"{{\"s\":\"{m.source}\",\"w\":\"{m.matchId}\"}}", Encoding.UTF8, "application/json"))
         }).ToList();
 
         await Task.WhenAll(scrTasks.Select(t => t.task));
@@ -503,7 +504,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
             m.awayClubId, m.awayClub, m.awayLogo,
             homeScore = enriched.TryGetValue(m.matchId, out var e) ? e.home : m.homeScore,
             awayScore = enriched.TryGetValue(m.matchId, out var e2) ? e2.away : m.awayScore,
-            m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId
+            m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source
         })
         .GroupBy(m => m.date)
         .OrderByDescending(g => g.Key)
@@ -515,7 +516,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 m.homeClubId, m.homeClub, m.homeLogo,
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore,
-                m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId
+                m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source
             })
         });
 
@@ -692,28 +693,38 @@ app.MapGet("/competitions/{id:int}/topscorers", async (IHttpClientFactory httpFa
 .WithDescription("Topscorers van een competitie");
 
 // GET /matches/{id} — match details with scorers
-app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory httpFactory, long id) =>
+app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory httpFactory, long id, int? source) =>
 {
     var client = httpFactory.CreateClient();
-
-    // Fetch match data and scorers in parallel
-    var matchTask = client.PostAsync(
-        "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
-        new StringContent($"{{\"w\":\"{id}\",\"s\":\"1\"}}", Encoding.UTF8, "application/json"));
-    var scrTask = client.PostAsync(
-        "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
-        new StringContent($"{{\"s\":\"1\",\"w\":\"{id}\"}}", Encoding.UTF8, "application/json"));
-
-    await Task.WhenAll(matchTask, scrTask);
 
     // Parse match data
     // Fields: [0]=homeId [1]=awayId [2]=homeScore [3]=awayScore [4]=gespeeld(True/False)
     // [5]=dayOffset [6]=status [7]=homeRed [8]=awayRed [9]=hour [10]=minute
     // [11]=homeReport [12]=awayReport [13]=compId [14]=soort [15]=cixVoor [16]=cixTegen [17]=matchId
-    var matchJson = await matchTask.Result.Content.ReadAsStringAsync();
+    // League matches use s=1; cup matches use s=2. Try the league feed first,
+    // then fall back to the cup feed and use the selected source for all follow-up calls.
+    var matchSource = source is 1 or 2 ? source.Value : 1;
+    var matchResponse = await client.PostAsync(
+        "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
+        new StringContent($"{{\"w\":\"{id}\",\"s\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"));
+    var matchJson = await matchResponse.Content.ReadAsStringAsync();
     var matchData = JsonDocument.Parse(matchJson).RootElement.GetProperty("d").GetString();
 
+    if (string.IsNullOrEmpty(matchData))
+    {
+        matchSource = matchSource == 1 ? 2 : 1;
+        matchResponse = await client.PostAsync(
+            "https://voetbaloost.nl/SVC_Uitslagen.asmx/wedstrijd_data",
+            new StringContent($"{{\"w\":\"{id}\",\"s\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"));
+        matchJson = await matchResponse.Content.ReadAsStringAsync();
+        matchData = JsonDocument.Parse(matchJson).RootElement.GetProperty("d").GetString();
+    }
+
     if (string.IsNullOrEmpty(matchData)) return Results.NotFound();
+
+    var scrTask = client.PostAsync(
+        "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
+        new StringContent($"{{\"s\":\"{matchSource}\",\"w\":\"{id}\"}}", Encoding.UTF8, "application/json"));
 
     var f = matchData.TrimEnd('#').Split(';');
     var homeId = int.Parse(f[0]);
@@ -733,12 +744,12 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     Task<HttpResponseMessage>? homeReportTask = hasHomeReport
         ? client.PostAsync(
             "https://voetbaloost.nl/SVC_Verslagen.asmx/wvt",
-            new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"1\"}}", Encoding.UTF8, "application/json"))
+            new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"))
         : null;
     Task<HttpResponseMessage>? awayReportTask = hasAwayReport
         ? client.PostAsync(
             "https://voetbaloost.nl/SVC_Verslagen.asmx/wvu",
-            new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"1\"}}", Encoding.UTF8, "application/json"))
+            new StringContent($"{{\"wnr\":\"{id}\",\"soort\":\"{matchSource}\"}}", Encoding.UTF8, "application/json"))
         : null;
 
     var verslagTasks = new List<Task>();
@@ -1002,7 +1013,8 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
                 homeRedCards = int.TryParse(f[7], out var hr2) ? hr2 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar2) ? ar2 : 0,
-                matchId = long.Parse(f[17])
+                matchId = long.Parse(f[17]),
+                source = int.TryParse(f[14], out var source) ? source : 1
             };
         })
         .GroupBy(m => m.date)
@@ -1024,7 +1036,7 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 m.time,
                 m.homeRedCards,
                 m.awayRedCards,
-                m.matchId
+                m.matchId, m.source
             })
         });
 
@@ -1101,6 +1113,7 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 homeRedCards = int.TryParse(f[7], out var hr3) ? hr3 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar3) ? ar3 : 0,
                 matchId = long.Parse(f[17]),
+                source = int.TryParse(f[14], out var source) ? source : 1,
                 competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
             };
         })
@@ -1115,7 +1128,7 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
                 m.homeRedCards, m.awayRedCards,
-                m.time, m.matchId, m.competitionId
+                m.time, m.matchId, m.source, m.competitionId
             })
         });
 
@@ -1190,6 +1203,7 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 homeRedCards = int.TryParse(f[7], out var hr4) ? hr4 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar4) ? ar4 : 0,
                 matchId = long.Parse(f[17]),
+                source = int.TryParse(f[14], out var source) ? source : 1,
                 competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
             };
         })
@@ -1204,7 +1218,7 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
                 m.homeRedCards, m.awayRedCards,
-                m.time, m.matchId, m.competitionId
+                m.time, m.matchId, m.source, m.competitionId
             })
         });
 
@@ -1351,7 +1365,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
                     homeRedCards = int.TryParse(f[7], out var hr5) ? hr5 : 0,
                     awayRedCards = int.TryParse(f[8], out var ar5) ? ar5 : 0,
-                    matchId = long.Parse(f[17])
+                    matchId = long.Parse(f[17]),
+                    source = int.TryParse(f[14], out var source) ? source : 1
                 };
             }
             catch { return null; }
@@ -1394,7 +1409,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
                     homeRedCards = int.TryParse(f[7], out var hr6) ? hr6 : 0,
                     awayRedCards = int.TryParse(f[8], out var ar6) ? ar6 : 0,
-                    matchId = long.Parse(f[17])
+                    matchId = long.Parse(f[17]),
+                    source = int.TryParse(f[14], out var source) ? source : 1
                 };
             }
             catch { return null; }

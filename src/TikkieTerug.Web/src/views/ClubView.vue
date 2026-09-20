@@ -42,7 +42,7 @@
             v-for="match in allProgramma"
             :key="match.matchId"
             class="fixture-row-wrap"
-            @click="router.push(`/match/${match.matchId}`)"
+            @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
           >
             <div class="text-xs text-muted" style="text-align: center; padding-top: 4px;">{{ formatDateShort(match.date) }}</div>
             <div class="fixture-row" style="cursor: pointer;">
@@ -72,7 +72,7 @@
             v-for="match in allUitslagen"
             :key="match.matchId"
             class="fixture-row-wrap"
-            @click="router.push(`/match/${match.matchId}`)"
+            @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
           >
             <div class="text-xs text-muted" style="text-align: center; padding-top: 4px;">{{ formatDateShort(match.date) }}</div>
             <div class="fixture-row" style="cursor: pointer;">

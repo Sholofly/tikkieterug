@@ -174,7 +174,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 
 const props = defineProps({
@@ -185,6 +185,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const api = useApi()
 
 const match = ref(null)
@@ -197,7 +198,7 @@ let observer = null
 
 async function fetchMatch() {
   try {
-    const data = await api.getMatch(props.id)
+    const data = await api.getMatch(props.id, route.query.source)
     match.value = data
   } catch (e) {
     match.value = null
