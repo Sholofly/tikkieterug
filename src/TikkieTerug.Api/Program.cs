@@ -1257,9 +1257,6 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
     var programmaTask = client.PostAsync(
         "https://voetbaloost.nl/SVC_Teams.asmx/team_programma1",
         new StringContent($"{{\"id\":\"{clubIdStr}\",\"sd\":\"{sdCode}\",\"seizoen\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
-    var topscorersTask = client.PostAsync(
-        "https://voetbaloost.nl/SVC_Teams.asmx/topscorerat",
-        new StringContent($"{{\"c\":\"{clubIdStr}\",\"s\":\"{sdCode}\",\"e\":\"{teamNr}\",\"z\":\"{seizoen}\"}}", Encoding.UTF8, "application/json"));
     var standTask = club.CompetitionId.HasValue
         ? client.PostAsync(
             "https://voetbaloost.nl/SVC_Ranglijst.asmx/ranglijst_klasse",
@@ -1277,7 +1274,7 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
             new StringContent($"{{\"a\":\"{club.CompetitionId.Value}\"}}", Encoding.UTF8, "application/json"))
         : null;
 
-    await Task.WhenAll(new Task[] { uitslagenTask, programmaTask, topscorersTask, standTask, fotoTask }
+    await Task.WhenAll(new Task[] { uitslagenTask, programmaTask, standTask, fotoTask }
         .Concat(compNameTask != null ? new[] { compNameTask } : Array.Empty<Task>()).ToArray());
 
     var today = DateOnly.FromDateTime(DateTime.Today);
@@ -1423,31 +1420,66 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
         .Select(g => new { date = g.Key, matches = g.ToList() })
         .ToList();
 
-    // Parse topscorers: [0]=name [1]=? [2]=goalsThisSeason [3]=totalGoals [4]=playerId [5]=?
+    // Build current-season club scorers from official competition result events.
+    // The team topscorer endpoint returns historical totals, while the competition
+    // ranking only exposes a limited league-wide top list.
     var topscorers = new List<object>();
     try
     {
-        var topscorersJson = await topscorersTask.Result.Content.ReadAsStringAsync();
-        var topscorersData = JsonDocument.Parse(topscorersJson).RootElement.GetProperty("d").GetString();
-        if (!string.IsNullOrEmpty(topscorersData))
+        var teamClubId = club.ParentClubId ?? club.Id;
+        var scorerMatches = uitslagenRows
+            .Select(row => row.Split(';'))
+            .Where(f => f.Length >= 18
+                && (f[0] == teamClubId.ToString() || f[1] == teamClubId.ToString())
+                && int.TryParse(f[14], out var source) && source == 1
+                && long.TryParse(f[17], out _))
+            .Select(f => new
+            {
+                matchId = long.Parse(f[17]),
+                source = int.Parse(f[14]),
+                side = f[0] == teamClubId.ToString() ? "home" : "away"
+            })
+            .ToList();
+
+        var scoreTasks = scorerMatches.Select(async match =>
         {
-            topscorers = topscorersData.Split('#', StringSplitOptions.RemoveEmptyEntries)
-                .Select(r =>
-                {
-                    var f = r.Split(';');
-                    return new
-                    {
-                        name = f[0].Trim(),
-                        goalsThisSeason = int.TryParse(f[2], out var g) ? g : 0,
-                        totalGoals = int.TryParse(f[3], out var t) ? t : 0,
-                        playerId = int.TryParse(f[4], out var p) ? p : 0
-                    };
-                })
-                .Where(t => t.goalsThisSeason > 0)
-                .OrderByDescending(t => t.goalsThisSeason)
-                .Cast<object>()
-                .ToList();
-        }
+            try
+            {
+                var response = await client.PostAsync(
+                    "https://voetbaloost.nl/SVC_Verslagen.asmx/scr",
+                    new StringContent($"{{\"s\":\"{match.source}\",\"w\":\"{match.matchId}\"}}", Encoding.UTF8, "application/json"));
+                var json = await response.Content.ReadAsStringAsync();
+                var data = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+                if (string.IsNullOrEmpty(data)) return Array.Empty<(int PlayerId, string Name)>();
+
+                return data.Split('@')[0].Split('#', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(entry => entry.Split(';'))
+                    .Where(f => f.Length >= 5
+                        && int.TryParse(f[4], out var eventType)
+                        && eventType == (match.side == "home" ? 0 : 5)
+                        && int.TryParse(f[2], out _))
+                    .Select(f => (PlayerId: int.Parse(f[2]), Name: f[3].Trim()))
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<(int PlayerId, string Name)>();
+            }
+        });
+
+        topscorers = (await Task.WhenAll(scoreTasks))
+            .SelectMany(players => players)
+            .GroupBy(player => player.PlayerId)
+            .Select(group => new
+            {
+                playerId = group.Key,
+                name = group.First().Name,
+                goals = group.Count()
+            })
+            .OrderByDescending(player => player.goals)
+            .ThenBy(player => player.name)
+            .Cast<object>()
+            .ToList();
     }
     catch { }
 

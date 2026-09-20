@@ -206,9 +206,8 @@
       <div v-else-if="topscorers.length === 0" class="text-muted">Geen topscorers beschikbaar.</div>
       <div v-else class="card">
         <div class="topscorer-row header">
-          <span></span>
           <span class="topscorer-name">Speler</span>
-          <span class="topscorer-num">Goals</span>
+          <span class="topscorer-num">Doelp.</span>
         </div>
         <div
           v-for="player in topscorers"

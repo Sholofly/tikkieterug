@@ -161,19 +161,17 @@
       <div v-if="activeTab === 'topscorers'">
         <div v-if="data.topscorers.length === 0" class="text-muted text-sm" style="padding: 12px 0;">Geen topscorers.</div>
         <div v-else class="card">
-          <div class="topscorer-row three-col header">
+          <div class="topscorer-row header">
             <span class="topscorer-name">Speler</span>
-            <span class="topscorer-num">Seizoen</span>
-            <span class="topscorer-num">Totaal</span>
+            <span class="topscorer-num">Doelp.</span>
           </div>
           <div
             v-for="player in data.topscorers"
             :key="player.playerId"
-            class="topscorer-row three-col"
+            class="topscorer-row"
           >
             <span class="topscorer-name">{{ player.name }}</span>
-            <span class="topscorer-num font-bold">{{ player.goalsThisSeason }}</span>
-            <span class="topscorer-num text-muted">{{ player.totalGoals }}</span>
+            <span class="topscorer-num font-bold">{{ player.goals }}</span>
           </div>
         </div>
       </div>
