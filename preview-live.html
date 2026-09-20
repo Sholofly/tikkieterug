@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Match Preview</title>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-card: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #38bdf8;
+    --accent-dim: #0ea5e9;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --border: #334155;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex; justify-content: center;
+    padding: 32px 16px;
+  }
+  .container { width: 100%; max-width: 480px; }
+  h3 { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; padding-left: 4px; }
+  .card { background: var(--bg-card); border-radius: var(--radius); padding: 16px; margin-bottom: 24px; }
+  .card-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; font-size: 0.95rem; }
+
+  .match-row {
+    display: flex; align-items: center; padding: 10px 0; gap: 8px;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .match-row:last-child { border-bottom: none; }
+  .match-teams { flex: 1; min-width: 0; }
+  .match-team { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; line-height: 1.6; }
+  .match-score {
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+    text-align: right; font-weight: 700; font-size: 0.95rem;
+    min-width: 32px; font-variant-numeric: tabular-nums;
+  }
+  .match-score .score-line { line-height: 1.6; }
+  .club-logo-sm { width: 20px; height: 20px; border-radius: 3px; background: #fff2; }
+  .font-bold { font-weight: 700; }
+  .text-muted { color: var(--text-secondary); }
+
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-indicator.live {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    animation: pulse-glow 1.5s infinite alternate;
+  }
+  .status-indicator.halftime {
+    background: var(--yellow);
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.4);
+  }
+  .status-indicator.ended { background: var(--text-muted); opacity: 0.5; }
+  .status-indicator.scheduled { background: var(--accent-dim); opacity: 0.7; }
+
+  @keyframes pulse-glow {
+    0% { opacity: 0.6; box-shadow: 0 0 4px var(--red); transform: scale(0.9); }
+    100% { opacity: 1; box-shadow: 0 0 12px var(--red); transform: scale(1.1); }
+  }
+
+  .text-live { color: var(--red); text-shadow: 0 0 8px rgba(248, 113, 113, 0.3); }
+  .text-halftime { color: var(--yellow); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="card">
+    <div class="card-title">Oost 4C ZA</div>
+
+    <!-- LIVE -->
+    <h3 style="margin-top: 12px;">Live</h3>
+    <div class="match-row">
+      <div class="match-teams">
+        <div class="match-team"><div class="club-logo-sm"></div><span>Quick'20</span></div>
+        <div class="match-score">
+          <div class="status-indicator live"></div>
+          <span class="score-line text-live">2 – 1</span>
+        </div>
+        <div class="match-team"><div class="club-logo-sm"></div><span>SC Diepenheim</span></div>
+      </div>
+    </div>
+
+    <!-- HALFTIME -->
+    <h3 style="margin-top: 16px;">Halftime</h3>
+    <div class="match-row">
+      <div class="match-teams">
+        <div class="match-team"><div class="club-logo-sm"></div><span>Buurse</span></div>
+        <div class="match-score">
+          <div class="status-indicator halftime"></div>
+          <span class="score-line text-halftime">0 – 0</span>
+        </div>
+        <div class="match-team"><div class="club-logo-sm"></div><span>Rijssen Vooruit</span></div>
+      </div>
+    </div>
+
+    <!-- ENDED -->
+    <h3 style="margin-top: 16px;">Ended</h3>
+    <div class="match-row">
+      <div class="match-teams">
+        <div class="match-team"><div class="club-logo-sm"></div><span class="font-bold">Sportlust Glanerbrug</span></div>
+        <div class="match-score">
+          <div class="status-indicator ended"></div>
+          <span class="score-line font-bold">3 – 0</span>
+        </div>
+        <div class="match-team"><div class="club-logo-sm"></div><span>Vogido</span></div>
+      </div>
+    </div>
+
+    <!-- SCHEDULED -->
+    <h3 style="margin-top: 16px;">Scheduled</h3>
+    <div class="match-row">
+      <div class="match-teams">
+        <div class="match-team"><div class="club-logo-sm"></div><span>Tubantia</span></div>
+        <div class="match-score">
+          <div class="status-indicator scheduled"></div>
+          <span class="score-line text-muted">14:30</span>
+        </div>
+        <div class="match-team"><div class="club-logo-sm"></div><span>Haaksbergen</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
