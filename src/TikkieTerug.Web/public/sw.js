@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tikkieterug-v1'
+const CACHE_NAME = 'tikkieterug-v2'
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()

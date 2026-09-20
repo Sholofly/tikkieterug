@@ -14,16 +14,14 @@ const showBack = () => !topLevelRoutes.includes(route.name)
       <button v-if="showBack()" class="header-back" @click="router.back()" aria-label="Terug">&#8592;</button>
     </div>
     <router-link to="/" class="app-brand">
-      <svg viewBox="0 0 512 512" class="brand-logo" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 512 512" class="brand-logo" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <rect width="512" height="512" rx="112" fill="#1e3a5f" />
-        <rect x="24" y="24" width="464" height="464" rx="88" fill="none" stroke="#f97316" stroke-width="24" />
-        <path d="M 230 140 H 130 L 60 210 L 130 280 H 170 L 120 230 H 230 V 420 H 290 V 230 H 310 V 140 H 230 Z" fill="#f97316" />
-        <path d="M 330 140 H 450 V 230 H 410 V 420 H 350 V 230 H 330 V 140 Z" fill="#f97316" />
-        <g transform="translate(380, 360)">
-          <circle cx="0" cy="0" r="42" fill="#ffffff" />
-          <path d="M 0 -18 L -17 -6 L -10 14 L 10 14 L 17 -6 Z" fill="#111827" />
-          <path d="M -17 -6 L -33 -18 M -10 14 L -20 32 M 10 14 L 20 32 M 17 -6 L 33 -18 M 0 -18 L 0 -36" stroke="#111827" stroke-width="5" stroke-linecap="round" />
-          <path d="M -33 -18 L -42 -10 M -20 32 L -10 40 M 20 32 L 10 40 M 33 -18 L 42 -10 M 0 -36 L -12 -40 M 0 -36 L 12 -40" stroke="#111827" stroke-width="5" stroke-linecap="round" />
+        <text x="256" y="322" text-anchor="middle" fill="#f97316" font-family="Arial, sans-serif" font-size="230" font-weight="900" letter-spacing="-28">TT</text>
+        <g transform="translate(391 364)">
+          <circle r="48" fill="#fff" stroke="#1e3a5f" stroke-width="4" />
+          <path d="M0-19 18-6 11 15H-11L-18-6Z" fill="#1e3a5f" />
+          <path d="M0-19V-43M18-6l21-13M11 15l13 22M-11 15l-13 22M-18-6l-21-13" fill="none" stroke="#1e3a5f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M0-43 20-35 39-19M39-19 42 4 24 24M24 24 0 37-24 24M-24 24-42 4-39-19M-39-19-20-35 0-43" fill="none" stroke="#1e3a5f" stroke-width="5" stroke-linejoin="round" />
         </g>
       </svg>
       TikkieTerug
