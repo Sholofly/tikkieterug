@@ -50,6 +50,14 @@ app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+static string GetMatchType(int competitionId) => competitionId switch
+{
+    -2 => "Beker",
+    -3 => "Vriendschappelijk",
+    -1 => "Nacompetitie",
+    _ => "Competitie"
+};
+
 // GET /logos/{clubId} — proxy and persist club logos so clients do not hotlink voetbalnederland.nl.
 app.MapGet("/logos/{clubId:int:min(1)}", async (int clubId, IHttpClientFactory httpFactory, HttpContext context, CancellationToken cancellationToken) =>
 {
@@ -457,7 +465,8 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 homeRedCards = int.TryParse(f[7], out var hr1) ? hr1 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar1) ? ar1 : 0,
                 matchId = long.Parse(f[17]),
-                source = int.TryParse(f[14], out var source) ? source : 1
+                source = int.TryParse(f[14], out var source) ? source : 1,
+                matchType = GetMatchType(int.Parse(f[13]))
             };
         })
         .ToList();
@@ -504,7 +513,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
             m.awayClubId, m.awayClub, m.awayLogo,
             homeScore = enriched.TryGetValue(m.matchId, out var e) ? e.home : m.homeScore,
             awayScore = enriched.TryGetValue(m.matchId, out var e2) ? e2.away : m.awayScore,
-            m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source
+            m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source, m.matchType
         })
         .GroupBy(m => m.date)
         .OrderByDescending(g => g.Key)
@@ -516,7 +525,7 @@ app.MapGet("/competitions/{id:int}/uitslagen", async (AppDbContext db, IHttpClie
                 m.homeClubId, m.homeClub, m.homeLogo,
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore,
-                m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source
+                m.status, m.time, m.homeRedCards, m.awayRedCards, m.matchId, m.source, m.matchType
             })
         });
 
@@ -774,13 +783,7 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     // Enrich club names from DB
     var clubIds = new[] { homeId, awayId };
     var compId = int.Parse(f[13]);
-    var matchType = compId switch
-    {
-        -2 => "Beker",
-        -3 => "Vriendschappelijk",
-        -1 => "Nacompetitie",
-        _ => "Competitie"
-    };
+    var matchType = GetMatchType(compId);
     var clubLookupTask = db.Clubs
         .Where(c => clubIds.Contains(c.Id))
         .ToDictionaryAsync(c => c.Id, c => c.Name);
@@ -1026,7 +1029,8 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 homeRedCards = int.TryParse(f[7], out var hr2) ? hr2 : 0,
                 awayRedCards = int.TryParse(f[8], out var ar2) ? ar2 : 0,
                 matchId = long.Parse(f[17]),
-                source = int.TryParse(f[14], out var source) ? source : 1
+                source = int.TryParse(f[14], out var source) ? source : 1,
+                matchType = GetMatchType(int.Parse(f[13]))
             };
         })
         .GroupBy(m => m.date)
@@ -1048,7 +1052,7 @@ app.MapGet("/competitions/{id:int}/programma", async (AppDbContext db, IHttpClie
                 m.time,
                 m.homeRedCards,
                 m.awayRedCards,
-                m.matchId, m.source
+                m.matchId, m.source, m.matchType
             })
         });
 
@@ -1126,7 +1130,8 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 awayRedCards = int.TryParse(f[8], out var ar3) ? ar3 : 0,
                 matchId = long.Parse(f[17]),
                 source = int.TryParse(f[14], out var source) ? source : 1,
-                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
+                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null,
+                matchType = GetMatchType(int.Parse(f[13]))
             };
         })
         .GroupBy(m => m.date)
@@ -1140,7 +1145,7 @@ app.MapGet("/clubs/{id:int}/programma", async (AppDbContext db, IHttpClientFacto
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
                 m.homeRedCards, m.awayRedCards,
-                m.time, m.matchId, m.source, m.competitionId
+                m.time, m.matchId, m.source, m.competitionId, m.matchType
             })
         });
 
@@ -1216,7 +1221,8 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 awayRedCards = int.TryParse(f[8], out var ar4) ? ar4 : 0,
                 matchId = long.Parse(f[17]),
                 source = int.TryParse(f[14], out var source) ? source : 1,
-                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null
+                competitionId = int.TryParse(f[13], out var cid) ? cid : (int?)null,
+                matchType = GetMatchType(int.Parse(f[13]))
             };
         })
         .GroupBy(m => m.date)
@@ -1230,7 +1236,7 @@ app.MapGet("/clubs/{id:int}/uitslagen", async (AppDbContext db, IHttpClientFacto
                 m.awayClubId, m.awayClub, m.awayLogo,
                 m.homeScore, m.awayScore, m.status,
                 m.homeRedCards, m.awayRedCards,
-                m.time, m.matchId, m.source, m.competitionId
+                m.time, m.matchId, m.source, m.competitionId, m.matchType
             })
         });
 
@@ -1375,7 +1381,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     homeRedCards = int.TryParse(f[7], out var hr5) ? hr5 : 0,
                     awayRedCards = int.TryParse(f[8], out var ar5) ? ar5 : 0,
                     matchId = long.Parse(f[17]),
-                    source = int.TryParse(f[14], out var source) ? source : 1
+                    source = int.TryParse(f[14], out var source) ? source : 1,
+                    matchType = GetMatchType(int.Parse(f[13]))
                 };
             }
             catch { return null; }
@@ -1419,7 +1426,8 @@ app.MapGet("/clubs/{id:int}/team", async (AppDbContext db, IHttpClientFactory ht
                     homeRedCards = int.TryParse(f[7], out var hr6) ? hr6 : 0,
                     awayRedCards = int.TryParse(f[8], out var ar6) ? ar6 : 0,
                     matchId = long.Parse(f[17]),
-                    source = int.TryParse(f[14], out var source) ? source : 1
+                    source = int.TryParse(f[14], out var source) ? source : 1,
+                    matchType = GetMatchType(int.Parse(f[13]))
                 };
             }
             catch { return null; }

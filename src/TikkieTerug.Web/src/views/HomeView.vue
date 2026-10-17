@@ -49,7 +49,9 @@
                   <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
                 </div>
               </div>
-              <div v-if="match._compName" class="fixture-comp-name">{{ match._compName }}</div>
+              <div v-if="match.matchType || match._compName" class="fixture-match-type">
+                {{ [match.matchType, match._compName].filter(Boolean).join(' · ') }}
+              </div>
             </div>
           </div>
         </div>
@@ -98,6 +100,7 @@
                   <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
                 </div>
               </div>
+              <div v-if="match.matchType" class="fixture-match-type">{{ match.matchType }}</div>
             </div>
           </div>
         </div>

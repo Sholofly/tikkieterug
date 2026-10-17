@@ -737,7 +737,8 @@ a { color: var(--accent); text-decoration: none; }
   border-top: 1px solid var(--border);
   margin-top: 4px;
 }
-.fixture-comp-name {
+.fixture-comp-name,
+.fixture-match-type {
   text-align: center;
   font-size: 0.7rem;
   color: var(--text-muted);

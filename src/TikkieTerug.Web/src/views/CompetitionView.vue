@@ -120,6 +120,7 @@
                  <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
                </div>
               </div>
+              <div v-if="match.matchType" class="fixture-match-type">{{ match.matchType }}</div>
             </div>
         </div>
       </div>
@@ -153,6 +154,7 @@
                  <span>{{ match.awayClub }}</span>
                </div>
               </div>
+              <div v-if="match.matchType" class="fixture-match-type">{{ match.matchType }}</div>
             </div>
         </div>
       </div>
