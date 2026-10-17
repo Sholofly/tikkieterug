@@ -735,9 +735,11 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     var dayOffset = int.Parse(f[5]);
     var gespeeld = f[4] == "True" || f[4] == "1";
     var rawStatus = int.Parse(f[6]);
-    // wedstrijd_data sets gespeeld=True once match starts, not just when ended.
-    // Only force to "ended" if gespeeld=true AND rawStatus is 0 (no live status).
-    var statusCode = (gespeeld && rawStatus == 0) ? 3 : rawStatus;
+    // wedstrijd_data sets gespeeld=True once match starts, so retain live status on match day.
+    // For past match days, stale live/halftime statuses should be shown as ended.
+    var statusCode = gespeeld && (rawStatus == 0 || (dayOffset < 0 && (rawStatus is 1 or 2)))
+        ? 3
+        : rawStatus;
 
     // Conditionally fire verslag requests based on report flags f[11] (home) and f[12] (away)
     var hasHomeReport = f.Length > 11 && f[11] == "1";
@@ -772,6 +774,13 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     // Enrich club names from DB
     var clubIds = new[] { homeId, awayId };
     var compId = int.Parse(f[13]);
+    var matchType = compId switch
+    {
+        -2 => "Beker",
+        -3 => "Vriendschappelijk",
+        -1 => "Nacompetitie",
+        _ => "Competitie"
+    };
     var clubLookupTask = db.Clubs
         .Where(c => clubIds.Contains(c.Id))
         .ToDictionaryAsync(c => c.Id, c => c.Name);
@@ -930,6 +939,7 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
         time = $"{f[9]}:{f[10].PadLeft(2, '0')}",
         status,
         competitionId = compId,
+        matchType,
         competitionName,
         homeClubId = homeId,
         homeClub = clubNames.GetValueOrDefault(homeId, "Onbekend"),
