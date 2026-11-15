@@ -71,7 +71,7 @@
 
         <!-- Date & Time -->
         <div class="text-center text-muted text-xs" style="padding: 0.25rem 1rem 0.5rem;">
-          {{ new Date(match.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) }}<span v-if="match.time"> · {{ match.time }}</span>
+          {{ formatMatchDate(match.date) }}<span v-if="match.time"> · {{ match.time }}</span>
         </div>
         <div v-if="match.matchType || match.competitionName" class="text-center text-xs text-muted" style="padding: 0 1rem 1.25rem;">
           {{ match.matchType }}
@@ -176,7 +176,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 
@@ -198,26 +198,52 @@ const headerCard = ref(null)
 const history = ref([])
 let refreshInterval = null
 let observer = null
+let matchRequest = 0
 
-async function fetchMatch() {
+async function fetchMatch(request = matchRequest) {
   try {
     const data = await api.getMatch(props.id, route.query.source)
-    match.value = data
+    if (request === matchRequest) match.value = data
   } catch (e) {
-    match.value = null
-  } finally {
-    loading.value = false
+    if (request === matchRequest) match.value = null
   }
 }
 
-async function fetchHistory() {
+async function fetchHistory(request = matchRequest) {
   if (!match.value) return
   try {
-    history.value = await api.getMatchHistory(
+    const data = await api.getMatchHistory(
       match.value.homeClubId, match.value.awayClubId, 'ZA', 'ZA'
     )
-  } catch { history.value = [] }
+    if (request === matchRequest) history.value = data
+  } catch {
+    if (request === matchRequest) history.value = []
+  }
 }
+
+async function loadMatchPage() {
+  const request = ++matchRequest
+  if (refreshInterval) clearInterval(refreshInterval)
+  match.value = null
+  history.value = []
+  loading.value = true
+
+  await fetchMatch(request)
+  if (request !== matchRequest) return
+  loading.value = false
+
+  await fetchHistory(request)
+  if (request !== matchRequest) return
+
+  if (match.value?.status === 'live' || match.value?.status === 'halftime') {
+    refreshInterval = setInterval(() => fetchMatch(request), 30000)
+  }
+
+  await nextTick()
+  if (request === matchRequest) setupStickyObserver()
+}
+
+watch(() => [props.id, route.query.source], loadMatchPage, { immediate: true })
 
 const statusLabel = computed(() => {
   switch (match.value?.status) {
@@ -228,6 +254,14 @@ const statusLabel = computed(() => {
     default: return match.value?.status ?? ''
   }
 })
+
+function formatMatchDate(dateStr) {
+  const date = new Date(dateStr + 'T00:00:00')
+  const formatted = date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+  return date.getFullYear() !== new Date().getFullYear()
+    ? `${formatted} ${date.getFullYear()}`
+    : formatted
+}
 
 const timeline = computed(() => {
   if (!match.value) return []
@@ -251,6 +285,7 @@ function eventIcon(evt) {
 }
 
 function setupStickyObserver() {
+  if (observer) observer.disconnect()
   if (!headerCard.value) return
   observer = new IntersectionObserver(
     ([entry]) => {
@@ -261,18 +296,8 @@ function setupStickyObserver() {
   observer.observe(headerCard.value)
 }
 
-onMounted(async () => {
-  await fetchMatch()
-  await fetchHistory()
-
-  if (match.value?.status === 'live' || match.value?.status === 'halftime') {
-    refreshInterval = setInterval(fetchMatch, 30000)
-  }
-
-  setTimeout(setupStickyObserver, 100)
-})
-
 onUnmounted(() => {
+  matchRequest++
   if (refreshInterval) clearInterval(refreshInterval)
   if (observer) observer.disconnect()
 })

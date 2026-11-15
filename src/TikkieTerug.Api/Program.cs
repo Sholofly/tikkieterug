@@ -58,6 +58,14 @@ static string GetMatchType(int competitionId) => competitionId switch
     _ => "Competitie"
 };
 
+static string GetSpeeldagCode(string? code) => code switch
+{
+    "1" => "ZA",
+    "2" => "ZO",
+    "3" => "DA",
+    _ => "ZA"
+};
+
 // GET /logos/{clubId} — proxy and persist club logos so clients do not hotlink voetbalnederland.nl.
 app.MapGet("/logos/{clubId:int:min(1)}", async (int clubId, IHttpClientFactory httpFactory, HttpContext context, CancellationToken cancellationToken) =>
 {
@@ -119,11 +127,22 @@ app.MapPost("/clubs/import", async (AppDbContext db, IHttpClientFactory httpFact
     var compTask = client.GetStringAsync("https://voetbalnederland.nl/js/klassen.js");
 
     var letters = Enumerable.Range('A', 26).Select(c => (char)c).ToArray();
-    var letterTasks = letters.Select(letter =>
-        client.PostAsync(
-            "https://voetbaloost.nl/SVC_Teams.asmx/team_lijstabc",
-            new StringContent($"{{\"letter\":\"{letter}\"}}", Encoding.UTF8, "application/json"))
-    ).ToArray();
+    // The upstream answers a burst of parallel requests with a 403 HTML page, so throttle.
+    var letterThrottle = new SemaphoreSlim(4);
+    var letterTasks = letters.Select(async letter =>
+    {
+        await letterThrottle.WaitAsync();
+        try
+        {
+            return await client.PostAsync(
+                "https://voetbaloost.nl/SVC_Teams.asmx/team_lijstabc",
+                new StringContent($"{{\"letter\":\"{letter}\"}}", Encoding.UTF8, "application/json"));
+        }
+        finally
+        {
+            letterThrottle.Release();
+        }
+    }).ToArray();
 
     await Task.WhenAll(new Task[] { clTask, compTask }.Concat(letterTasks).ToArray());
 
@@ -702,7 +721,7 @@ app.MapGet("/competitions/{id:int}/topscorers", async (IHttpClientFactory httpFa
 .WithDescription("Topscorers van een competitie");
 
 // GET /matches/{id} — match details with scorers
-app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory httpFactory, long id, int? source) =>
+app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory httpFactory, ILogger<Program> logger, long id, int? source) =>
 {
     var client = httpFactory.CreateClient();
 
@@ -744,11 +763,75 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     var dayOffset = int.Parse(f[5]);
     var gespeeld = f[4] == "True" || f[4] == "1";
     var rawStatus = int.Parse(f[6]);
-    // wedstrijd_data sets gespeeld=True once match starts, so retain live status on match day.
-    // For past match days, stale live/halftime statuses should be shown as ended.
-    var statusCode = gespeeld && (rawStatus == 0 || (dayOffset < 0 && (rawStatus is 1 or 2)))
-        ? 3
-        : rawStatus;
+    var statusCode = gespeeld ? 3 : rawStatus;
+    (bool ended, int homeScore, int awayScore)? recentResult = null;
+
+    if (!gespeeld && (rawStatus is 1 or 2))
+    {
+        async Task<(bool ended, int homeScore, int awayScore)> FindRecentResult(int clubId, string category)
+        {
+            try
+            {
+                using var response = await client.PostAsync(
+                    "https://voetbaloost.nl/SVC_Teams.asmx/team_uitslag_recent",
+                    new StringContent(
+                        JsonSerializer.Serialize(new { id = clubId.ToString(), sd = category }),
+                        Encoding.UTF8,
+                        "application/json"));
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    logger.LogWarning("Recent result lookup failed for club {ClubId}: HTTP {StatusCode}", clubId, response.StatusCode);
+                    return (false, 0, 0);
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var data = JsonDocument.Parse(json).RootElement.GetProperty("d").GetString();
+                if (string.IsNullOrEmpty(data)) return (false, 0, 0);
+
+                foreach (var row in data.Split('#', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var fields = row.Split(';');
+                    if (fields.Length <= 17
+                        || !long.TryParse(fields[17], out var recentMatchId)
+                        || recentMatchId != id
+                        || fields[4] is not ("True" or "1")
+                        || !int.TryParse(fields[2], out var homeScore)
+                        || !int.TryParse(fields[3], out var awayScore))
+                        continue;
+
+                    return (true, homeScore, awayScore);
+                }
+
+                return (false, 0, 0);
+            }
+            catch (HttpRequestException ex)
+            {
+                logger.LogWarning(ex, "Recent result lookup failed for club {ClubId}", clubId);
+                return (false, 0, 0);
+            }
+            catch (TaskCanceledException ex)
+            {
+                logger.LogWarning(ex, "Recent result lookup timed out for club {ClubId}", clubId);
+                return (false, 0, 0);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "Could not parse recent results for club {ClubId}", clubId);
+                return (false, 0, 0);
+            }
+        }
+
+        var recentResults = await Task.WhenAll(
+            FindRecentResult(homeId, GetSpeeldagCode(f.Length > 18 ? f[18] : null)),
+            FindRecentResult(awayId, GetSpeeldagCode(f.Length > 19 ? f[19] : null)));
+        var completedResult = recentResults.FirstOrDefault(result => result.ended);
+        if (completedResult.ended)
+        {
+            recentResult = completedResult;
+            statusCode = 3;
+        }
+    }
 
     // Conditionally fire verslag requests based on report flags f[11] (home) and f[12] (away)
     var hasHomeReport = f.Length > 11 && f[11] == "1";
@@ -927,8 +1010,8 @@ app.MapGet("/matches/{id:long}", async (AppDbContext db, IHttpClientFactory http
     }
 
     // For live/halftime matches, derive score from goals (fields [2]/[3] can lag behind)
-    var homeScore = int.Parse(f[2]);
-    var awayScore = int.Parse(f[3]);
+    var homeScore = recentResult?.homeScore ?? int.Parse(f[2]);
+    var awayScore = recentResult?.awayScore ?? int.Parse(f[3]);
     if (status is "live" or "halftime" && scorers.Count > 0)
     {
         homeScore = scorers.Count(s => ((dynamic)s).side == "home");

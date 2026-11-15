@@ -301,7 +301,10 @@ function formatDateShort(dateStr) {
   const today = new Date().toISOString().slice(0, 10)
   if (dateStr === today) return 'Vandaag'
   const d = new Date(dateStr + 'T00:00:00')
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  const formatted = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  return d.getFullYear() !== new Date().getFullYear()
+    ? `${formatted} ${d.getFullYear()}`
+    : formatted
 }
 
 // Flatten programma groups into a single sorted list
