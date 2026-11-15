@@ -34,9 +34,6 @@ export function useApi() {
     getResults: (competitionId) =>
       fetchJson(`/competitions/${competitionId}/uitslagen`),
 
-    getPeriodestand: (competitionId) =>
-      fetchJson(`/competitions/${competitionId}/periodestand`),
-
     getMatch: (matchId, source) =>
       fetchJson(`/matches/${matchId}${source ? `?source=${encodeURIComponent(source)}` : ''}`),
 

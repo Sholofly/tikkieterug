@@ -13,7 +13,6 @@
       <option value="stand">📊 Stand</option>
       <option value="uitslagen">⚽ Uitslagen</option>
       <option value="programma">📅 Programma</option>
-      <option value="periodes">📋 Periodes</option>
       <option value="topscorers">🥇 Topscorers</option>
     </select>
 
@@ -160,48 +159,6 @@
       </div>
     </div>
 
-    <!-- Periodes Tab -->
-    <div v-if="activeTab === 'periodes'">
-      <div v-if="loadingPeriodes" class="loading">Laden...</div>
-      <div v-else-if="periodes.length === 0" class="text-muted">Geen periodes beschikbaar.</div>
-      <div v-else>
-        <div v-for="periode in periodesReversed" :key="periode.period" class="card">
-          <h3>Periode {{ periode.period }}
-            <span v-if="periode.period === maxPeriod" class="badge badge-live" style="margin-left: 6px; animation: none;">Lopend</span>
-          </h3>
-          <div class="standings-row periodes header">
-            <span class="standings-pos">#</span>
-            <span></span>
-            <span class="standings-name">Club</span>
-            <span class="standings-num">W</span>
-            <span class="standings-num">W</span>
-            <span class="standings-num">G</span>
-            <span class="standings-num">V</span>
-            <span class="standings-pts">Pts</span>
-          </div>
-          <div
-            v-for="row in periode.standings"
-            :key="row.clubId"
-            class="standings-row periodes"
-            style="cursor: pointer;"
-            @click="router.push(`/club/${row.clubId}`)"
-          >
-            <span class="standings-pos">{{ row.position }}</span>
-            <span>
-              <img v-if="row.logo" :src="row.logo" class="club-logo-sm" :alt="row.club" />
-              <span v-else class="club-logo-sm"></span>
-            </span>
-            <span class="standings-name">{{ row.club }}</span>
-            <span class="standings-num">{{ row.played }}</span>
-            <span class="standings-num">{{ row.won }}</span>
-            <span class="standings-num">{{ row.drawn }}</span>
-            <span class="standings-num">{{ row.lost }}</span>
-            <span class="standings-pts">{{ row.points }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Topscorers Tab -->
     <div v-if="activeTab === 'topscorers'">
       <div v-if="loadingTopscorers" class="loading">Laden...</div>
@@ -264,7 +221,7 @@ function toggleFavorite() {
   }
 }
 
-const validTabs = ['stand', 'uitslagen', 'programma', 'periodes', 'topscorers']
+const validTabs = ['stand', 'uitslagen', 'programma', 'topscorers']
 const activeTab = ref(validTabs.includes(route.query.tab) ? route.query.tab : 'stand')
 
 // Sync tab to URL query
@@ -276,19 +233,14 @@ const detailedStand = ref(false)
 const standings = ref([])
 const results = ref([])
 const fixtures = ref([])
-const periodes = ref([])
 const topscorers = ref([])
 
 const loadingStandings = ref(false)
 const loadingResults = ref(false)
 const loadingFixtures = ref(false)
-const loadingPeriodes = ref(false)
 const loadingTopscorers = ref(false)
 
 const today = new Date().toISOString().slice(0, 10)
-
-const periodesReversed = computed(() => [...periodes.value].reverse())
-const maxPeriod = computed(() => periodes.value.length > 0 ? Math.max(...periodes.value.map(p => p.period)) : 0)
 
 function statusLabel(status) {
   return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status
@@ -334,16 +286,6 @@ async function loadFixtures() {
   }
 }
 
-async function loadPeriodes() {
-  if (periodes.value.length > 0) return
-  loadingPeriodes.value = true
-  try {
-    periodes.value = await api.getPeriodestand(competitionId)
-  } finally {
-    loadingPeriodes.value = false
-  }
-}
-
 async function loadTopscorers() {
   if (topscorers.value.length > 0) return
   loadingTopscorers.value = true
@@ -358,7 +300,6 @@ function loadActiveTab(tab) {
   if (tab === 'stand') loadStandings()
   else if (tab === 'uitslagen') loadResults()
   else if (tab === 'programma') loadFixtures()
-  else if (tab === 'periodes') loadPeriodes()
   else if (tab === 'topscorers') loadTopscorers()
 }
 
