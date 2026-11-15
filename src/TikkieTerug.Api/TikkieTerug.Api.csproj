@@ -14,6 +14,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.6" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.1.7" />
+    <!-- Pinned above the versions pulled in transitively, which have known high severity vulnerabilities
+         (GHSA-v5pm-xwqc-g5wc, GHSA-2m69-gcr7-jv3q). Remove once the parent packages ship fixed versions. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
   </ItemGroup>
 
 </Project>
