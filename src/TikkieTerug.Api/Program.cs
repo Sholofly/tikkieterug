@@ -1785,6 +1785,13 @@ app.MapGet("/matches/history", async (IHttpClientFactory httpFactory, int home, 
 .WithName("GetMatchHistory")
 .WithDescription("Onderlinge historie tussen twee clubs");
 
+// GET /health — liveness for the container healthcheck; only checks the database, never the upstream
+app.MapGet("/health", async (AppDbContext db, CancellationToken cancellationToken) =>
+    await db.Database.CanConnectAsync(cancellationToken)
+        ? Results.Ok(new { status = "ok" })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable))
+.ExcludeFromDescription();
+
 // SPA fallback: serve index.html for unmatched routes (Vue Router handles client-side routing)
 app.MapFallbackToFile("index.html");
 
