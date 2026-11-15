@@ -190,7 +190,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
@@ -256,51 +256,38 @@ function formatDateShort(dateStr) {
     : formatted
 }
 
-async function loadStandings() {
-  if (standings.value.length > 0) return
-  loadingStandings.value = true
+// Fetch fresh data. The spinner only shows when there is nothing to display yet;
+// otherwise the previous data stays visible until the new data arrives.
+async function refresh(target, loadingFlag, fetcher) {
+  loadingFlag.value = target.value.length === 0
   try {
-    standings.value = await api.getStandings(competitionId)
+    target.value = await fetcher()
+  } catch {
+    // keep showing the previous data
   } finally {
-    loadingStandings.value = false
+    loadingFlag.value = false
   }
 }
 
-async function loadResults() {
-  if (results.value.length > 0) return
-  loadingResults.value = true
-  try {
-    results.value = await api.getResults(competitionId)
-  } finally {
-    loadingResults.value = false
-  }
+const tabLoaders = {
+  stand: () => refresh(standings, loadingStandings, () => api.getStandings(competitionId)),
+  uitslagen: () => refresh(results, loadingResults, () => api.getResults(competitionId)),
+  programma: () => refresh(fixtures, loadingFixtures, () => api.getFixtures(competitionId)),
+  topscorers: () => refresh(topscorers, loadingTopscorers, () => api.getCompetitionTopscorers(competitionId)),
 }
 
-async function loadFixtures() {
-  if (fixtures.value.length > 0) return
-  loadingFixtures.value = true
-  try {
-    fixtures.value = await api.getFixtures(competitionId)
-  } finally {
-    loadingFixtures.value = false
-  }
-}
-
-async function loadTopscorers() {
-  if (topscorers.value.length > 0) return
-  loadingTopscorers.value = true
-  try {
-    topscorers.value = await api.getCompetitionTopscorers(competitionId)
-  } finally {
-    loadingTopscorers.value = false
-  }
-}
+// Data older than this is fetched again when its tab is opened or the app comes back to the foreground
+const STALE_MS = 30_000
+const loadedAt = {}
 
 function loadActiveTab(tab) {
-  if (tab === 'stand') loadStandings()
-  else if (tab === 'uitslagen') loadResults()
-  else if (tab === 'programma') loadFixtures()
-  else if (tab === 'topscorers') loadTopscorers()
+  if (Date.now() - (loadedAt[tab] || 0) < STALE_MS) return
+  loadedAt[tab] = Date.now()
+  tabLoaders[tab]?.()
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') loadActiveTab(activeTab.value)
 }
 
 function switchTab(tab) {
@@ -313,8 +300,13 @@ watch(activeTab, (tab) => {
 
 onMounted(() => {
   loadActiveTab(activeTab.value)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   api.getCompetitionName(competitionId).then(data => {
     competitionName.value = data.name
   }).catch(() => {})
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>

@@ -228,7 +228,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import { useFavoritesStore } from '../stores/favorites.js'
@@ -258,6 +258,7 @@ const today = new Date().toISOString().slice(0, 10)
 // Sync tab to URL and lazy-load info
 watch(activeTab, async (tab) => {
   router.replace({ query: { ...route.query, tab } })
+  refreshIfStale()
   if (tab === 'info' && !infoLoaded.value) {
     infoLoading.value = true
     try {
@@ -325,22 +326,50 @@ function statusLabel(status) {
 // Compact stand grid: only 5 columns (no detailed toggle needed - use competition page for that)
 // Highlight current club's row
 
-async function fetchClub(resetTab = true) {
-  loading.value = true
-  data.value = null
-  clubInfo.value = null
-  infoLoaded.value = false
-  if (resetTab) activeTab.value = 'uitslagen'
-  try {
-    data.value = await api.getClubTeam(props.id)
-  } catch (e) {
+let clubRequest = 0
+let loadedAt = 0
+
+// silent: refresh in the background and keep showing the current data meanwhile
+async function fetchClub(resetTab = true, silent = false) {
+  const request = ++clubRequest
+  if (!silent) {
+    loading.value = true
     data.value = null
-  } finally {
-    loading.value = false
+    clubInfo.value = null
+    infoLoaded.value = false
+    if (resetTab) activeTab.value = 'uitslagen'
   }
+  try {
+    const result = await api.getClubTeam(props.id)
+    if (request !== clubRequest) return
+    data.value = result
+    loadedAt = Date.now()
+  } catch (e) {
+    if (request === clubRequest && !silent) data.value = null
+  } finally {
+    if (request === clubRequest) loading.value = false
+  }
+}
+
+// Data older than this is fetched again when a tab is opened or the app comes back to the foreground
+const STALE_MS = 30_000
+
+function refreshIfStale() {
+  if (!loading.value && Date.now() - loadedAt > STALE_MS) fetchClub(false, true)
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') refreshIfStale()
 }
 
 watch(() => props.id, () => fetchClub(true))
 
-onMounted(() => fetchClub(false))
+onMounted(() => {
+  fetchClub(false)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 </script>
