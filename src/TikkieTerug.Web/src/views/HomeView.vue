@@ -3,139 +3,95 @@
     <h1>Wedstrijden</h1>
   </div>
 
+  <!-- Day tabs: today + the coming days that have matches -->
+  <div v-if="dayTabs.length > 1" class="day-scroll">
+    <button
+      v-for="tab in dayTabs"
+      :key="tab.date"
+      class="day-pill"
+      :class="{ active: activeDate === tab.date }"
+      @click="selectedDate = tab.date"
+    >
+      {{ tab.label }}
+    </button>
+  </div>
+
   <div class="content">
-      <div v-if="loading" class="loading" style="margin-top: 16px;">Laden...</div>
+    <div v-if="loading" class="loading" style="margin-top: 16px;">Laden...</div>
 
-      <template v-else>
-        <!-- Today's matches: followed clubs -->
-        <div v-if="todayClubMatches.length > 0" style="margin-top: 16px;">
-          <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">Mijn clubs — vandaag</div>
-          <div class="card">
-            <div
-              v-for="match in todayClubMatches"
-              :key="match.matchId"
-              class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
-            >
-              <div class="fixture-row" style="cursor: pointer;">
-                <div class="fixture-home">
-                  <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
-                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-                </div>
-                <div class="fixture-center">
-                  <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                  <span
-                    v-if="match.status !== 'scheduled'"
-                    class="badge"
-                    :class="{
-                      'badge-live': match.status === 'live',
-                      'badge-halftime': match.status === 'halftime',
-                      'badge-ended': match.status === 'ended',
-                    }"
-                  >{{ statusLabel(match.status) }}</span>
-                </div>
-                <div class="fixture-away">
-                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
-                </div>
-              </div>
-              <div v-if="match.homeRedCards || match.awayRedCards" class="fixture-red-row">
-                <div style="display: flex; justify-content: flex-end; gap: 2px; padding-right: 26px;">
-                  <span v-for="n in (match.homeRedCards || 0)" :key="'hr'+n" class="red-stripe"></span>
-                </div>
-                <div></div>
-                <div style="display: flex; gap: 2px; padding-left: 26px;">
-                  <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
-                </div>
-              </div>
-              <div v-if="match.matchType || match._compName" class="fixture-match-type">
-                {{ [match.matchType, match._compName].filter(Boolean).join(' · ') }}
-              </div>
-            </div>
-          </div>
+    <template v-else>
+      <!-- Followed clubs first -->
+      <div v-if="dayClubMatches.length > 0" style="margin-top: 16px;">
+        <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">Mijn clubs — {{ activeDayName }}</div>
+        <div class="card">
+          <MatchRow v-for="match in dayClubMatches" :key="match.matchId" :match="match" show-competition />
         </div>
+      </div>
 
-        <!-- Today's matches: per followed competition -->
-        <div v-for="group in todayCompetitionGroups" :key="group.compId" style="margin-top: 16px;">
-          <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">
-            <router-link :to="`/competition/${group.compId}`" style="text-decoration: none; color: inherit;">{{ group.compName }}</router-link> — vandaag
-          </div>
-          <div class="card">
-            <div
-              v-for="match in group.matches"
-              :key="match.matchId"
-              class="fixture-row-wrap"
-              @click="router.push(`/match/${match.matchId}?source=${match.source || 1}`)"
-            >
-              <div class="fixture-row" style="cursor: pointer;">
-                <div class="fixture-home">
-                  <span :class="{ 'font-bold': match.status === 'ended' && match.homeScore > match.awayScore }">{{ match.homeClub }}</span>
-                  <img :src="match.homeLogo" class="club-logo-sm" :alt="match.homeClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.homeClubId}`)" />
-                </div>
-                <div class="fixture-center">
-                  <span v-if="match.status === 'scheduled'" class="fixture-time" style="font-size: 0.85rem;">{{ match.time }}</span>
-                  <span v-else class="fixture-score" :class="{ 'text-live': match.status === 'live' }">{{ match.homeScore }} – {{ match.awayScore }}</span>
-                  <span
-                    v-if="match.status !== 'scheduled'"
-                    class="badge"
-                    :class="{
-                      'badge-live': match.status === 'live',
-                      'badge-halftime': match.status === 'halftime',
-                      'badge-ended': match.status === 'ended',
-                    }"
-                  >{{ statusLabel(match.status) }}</span>
-                </div>
-                <div class="fixture-away">
-                  <img :src="match.awayLogo" class="club-logo-sm" :alt="match.awayClub" style="cursor: pointer;" @click.stop="router.push(`/club/${match.awayClubId}`)" />
-                  <span :class="{ 'font-bold': match.status === 'ended' && match.awayScore > match.homeScore }">{{ match.awayClub }}</span>
-                </div>
-              </div>
-              <div v-if="match.homeRedCards || match.awayRedCards" class="fixture-red-row">
-                <div style="display: flex; justify-content: flex-end; gap: 2px; padding-right: 26px;">
-                  <span v-for="n in (match.homeRedCards || 0)" :key="'hr'+n" class="red-stripe"></span>
-                </div>
-                <div></div>
-                <div style="display: flex; gap: 2px; padding-left: 26px;">
-                  <span v-for="n in (match.awayRedCards || 0)" :key="'ar'+n" class="red-stripe"></span>
-                </div>
-              </div>
-              <div v-if="match.matchType" class="fixture-match-type">{{ match.matchType }}</div>
-            </div>
-          </div>
+      <!-- Then per followed competition -->
+      <div v-for="group in dayCompetitionGroups" :key="group.compId" style="margin-top: 16px;">
+        <div class="text-xs text-muted font-bold" style="margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;">
+          <router-link :to="`/competition/${group.compId}`" style="text-decoration: none; color: inherit;">{{ group.compName }}</router-link> — {{ activeDayName }}
         </div>
-
-        <!-- Empty state -->
-        <div v-if="todayClubMatches.length === 0 && todayCompetitionGroups.length === 0" style="margin-top: 16px;">
-          <div class="card text-muted text-sm" style="text-align: center;">
-            Geen wedstrijden vandaag.
-          </div>
+        <div class="card">
+          <MatchRow v-for="match in group.matches" :key="match.matchId" :match="match" />
         </div>
-      </template>
+      </div>
 
-
+      <!-- Empty state -->
+      <div v-if="dayClubMatches.length === 0 && dayCompetitionGroups.length === 0" style="margin-top: 16px;">
+        <div class="card text-muted text-sm" style="text-align: center;">
+          Geen wedstrijden {{ activeDayName }}.
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useFavoritesStore } from '../stores/favorites'
+import MatchRow from '../components/MatchRow.vue'
 
-const router = useRouter()
 const api = useApi()
 const favoritesStore = useFavoritesStore()
 
 const loading = ref(false)
-const allTodayMatches = ref([])
+const allMatches = ref([])
 let refreshInterval = null
 
-const today = new Date().toISOString().slice(0, 10)
+const UPCOMING_DAYS = 7
 
-function statusLabel(status) {
-  return { live: 'Live', halftime: 'Rust', ended: 'Afgelopen', scheduled: 'Gepland' }[status] || status
+// Local (not UTC) dates, matching the yyyy-MM-dd dates the API returns
+function localDate(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
+const today = localDate(new Date())
+const maxDate = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() + UPCOMING_DAYS)
+  return localDate(d)
+})()
+
+const tomorrow = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return localDate(d)
+})()
+
+function dayLabel(date, short) {
+  if (date === today) return 'Vandaag'
+  if (date === tomorrow) return 'Morgen'
+  const d = new Date(`${date}T00:00:00`)
+  return short
+    ? d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })
+    : d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+const selectedDate = ref(today)
 
 // Sort: live first, halftime, scheduled, ended last
 const statusOrder = { live: 0, halftime: 1, scheduled: 2, ended: 3 }
@@ -149,25 +105,45 @@ function sortMatches(matches) {
   })
 }
 
-const todayMatches = computed(() => sortMatches(allTodayMatches.value))
+// Today plus the coming days that have matches
+const dayTabs = computed(() => {
+  const upcoming = [...new Set(allMatches.value.map(m => m._date).filter(d => d > today))].sort()
+  return [
+    { date: today, label: 'Vandaag' },
+    ...upcoming.map(date => ({ date, label: dayLabel(date, true) })),
+  ]
+})
 
-// Today's matches for followed clubs
-const todayClubMatches = computed(() => {
+// Fall back to today when the selected day no longer has matches after a refresh
+const activeDate = computed(() =>
+  dayTabs.value.some(t => t.date === selectedDate.value) ? selectedDate.value : today
+)
+
+// Used in headings: "vandaag", "morgen" or "zaterdag 21 november"
+const activeDayName = computed(() => {
+  if (activeDate.value === today) return 'vandaag'
+  if (activeDate.value === tomorrow) return 'morgen'
+  return dayLabel(activeDate.value, false)
+})
+
+const dayMatches = computed(() => allMatches.value.filter(m => m._date === activeDate.value))
+
+// The selected day's matches for followed clubs
+const dayClubMatches = computed(() => {
   const favClubIds = new Set(favoritesStore.clubs.map(c => c.id))
   return sortMatches(
-    allTodayMatches.value.filter(m => favClubIds.has(m.homeClubId) || favClubIds.has(m.awayClubId))
+    dayMatches.value.filter(m => favClubIds.has(m.homeClubId) || favClubIds.has(m.awayClubId))
   )
 })
 
-// Today's matches grouped per followed competition
-const todayCompetitionGroups = computed(() => {
+// The selected day's matches grouped per followed competition
+const dayCompetitionGroups = computed(() => {
   const favComps = favoritesStore.competitions
   if (favComps.length === 0) return []
-  const favCompIds = new Set(favComps.map(c => c.id))
   const groups = []
   for (const comp of favComps) {
     const matches = sortMatches(
-      allTodayMatches.value.filter(m => m._compId === comp.id)
+      dayMatches.value.filter(m => m._compId === comp.id)
     )
     if (matches.length > 0) {
       groups.push({
@@ -183,7 +159,7 @@ const todayCompetitionGroups = computed(() => {
 async function fetchDashboardData() {
   if (!favoritesStore.hasFavorites()) return
 
-  loading.value = allTodayMatches.value.length === 0
+  loading.value = allMatches.value.length === 0
   try {
     const favClubs = favoritesStore.clubs
     const favComps = favoritesStore.competitions
@@ -232,7 +208,7 @@ async function fetchDashboardData() {
     for (const { compId, data } of clubProgrammaResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
-        if (group.date !== today) continue
+        if (group.date < today || group.date > maxDate) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
@@ -248,7 +224,7 @@ async function fetchDashboardData() {
     for (const { compId, data } of clubUitslagenResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
-        if (group.date !== today) continue
+        if (group.date < today || group.date > maxDate) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
@@ -265,7 +241,7 @@ async function fetchDashboardData() {
       const grouped = compUitslResults[i]
       if (!Array.isArray(grouped)) continue
       for (const group of grouped) {
-        if (group.date !== today) continue
+        if (group.date < today || group.date > maxDate) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
@@ -281,7 +257,7 @@ async function fetchDashboardData() {
     for (const { compId, data } of compProgrammaResults) {
       if (!Array.isArray(data)) continue
       for (const group of data) {
-        if (group.date !== today) continue
+        if (group.date < today || group.date > maxDate) continue
         for (const match of (group.matches || [])) {
           if (seen.has(match.matchId)) continue
           seen.add(match.matchId)
@@ -293,8 +269,8 @@ async function fetchDashboardData() {
       }
     }
 
-    // 4. Enrich today's non-ended matches with real-time data
-    const toEnrich = todayList.filter(m => m.status !== 'ended')
+    // 4. Enrich today's non-ended matches with real-time data (future days stay as scheduled)
+    const toEnrich = todayList.filter(m => m._date === today && m.status !== 'ended')
     if (toEnrich.length > 0) {
       const enriched = await Promise.all(
         toEnrich.map(m =>
@@ -316,7 +292,7 @@ async function fetchDashboardData() {
       }
     }
 
-    allTodayMatches.value = todayList
+    allMatches.value = todayList
   } finally {
     loading.value = false
   }
@@ -331,3 +307,44 @@ onUnmounted(() => {
   clearInterval(refreshInterval)
 })
 </script>
+
+<style scoped>
+.day-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 16px 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+
+.day-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch-friendly: at least 44px tall, readable text */
+.day-pill {
+  min-height: 44px;
+  min-width: 72px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.day-pill.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+}
+</style>
